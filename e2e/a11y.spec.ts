@@ -31,8 +31,8 @@ test("no WCAG AA violations through the ritual", async ({ page }) => {
   await expectAccessible(page);
   await page.locator('label:has(input[name="guide"])').first().click();
   await page.getByRole("button", { name: "Continue" }).click();
-  for (let i = 0; i < 3; i++) {
-    await page.locator("textarea").first().fill("Words.");
+  for (const prompt of ["What is ending?", "What are you afraid to lose — or afraid to keep?", "What should your Guide know before you arrive?"]) {
+    await page.getByLabel(prompt).fill("Words.");
     await page.getByRole("button", { name: /Next question|Continue/ }).click();
   }
   await page.getByText("Solo", { exact: true }).click();
