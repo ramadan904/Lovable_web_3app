@@ -2,8 +2,8 @@ import { lazy, Suspense } from "react";
 import { BrowserRouter, Route, Routes, useLocation } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useEffect } from "react";
+import { DemoGuide } from "@/components/brand/DemoGuide";
 import { Toaster } from "@/components/ui/sonner";
-import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/hooks/useAuth";
 import Index from "./pages/Index";
 
@@ -39,7 +39,6 @@ function Quiet() {
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
-      <TooltipProvider delayDuration={300}>
         <Toaster />
         <BrowserRouter>
           <ScrollToTop />
@@ -55,8 +54,8 @@ const App = () => (
               <Route path="*" element={<NotFound />} />
             </Routes>
           </Suspense>
+          <DemoGuide />
         </BrowserRouter>
-      </TooltipProvider>
     </AuthProvider>
   </QueryClientProvider>
 );

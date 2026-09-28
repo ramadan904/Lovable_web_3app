@@ -158,7 +158,7 @@ function GuideOption({
           </div>
           <p className="mt-1 text-sm text-bone-dim">
             <span className="text-copper-bright">{PRESENCE[guide.presence].name}</span>
-            <span className="mx-2 text-bone-ghost">·</span>
+            <span className="mx-2 text-bone-faint" aria-hidden>·</span>
             {guide.years_holding} years holding thresholds
           </p>
 
@@ -195,12 +195,12 @@ function GuideOption({
                 <span className="text-bone-dim">
                   {fmt(next.start, clientTz, "EEE d MMM")}, {fmtTime(next.start, clientTz)}
                 </span>
-                <span className="text-bone-ghost">({cityOf(clientTz)})</span>
+                <span className="text-bone-faint">({cityOf(clientTz)})</span>
               </>
             ) : (
               <>No open hours in the next four weeks</>
             )}
-            <span className="text-bone-ghost">·</span>
+            <span className="text-bone-faint" aria-hidden>·</span>
             {guide.max_sessions_per_day === 1 ? "one threshold a day" : `at most ${spell(guide.max_sessions_per_day)} a day`}
           </p>
         </div>

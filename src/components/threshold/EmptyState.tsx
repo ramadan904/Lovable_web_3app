@@ -26,7 +26,7 @@ export function EmptyState({
           </linearGradient>
         </defs>
       </svg>
-      <h2 className="text-balance font-serif text-3xl text-bone md:text-4xl">{title}</h2>
+      <h1 className="text-balance font-serif text-3xl text-bone md:text-4xl">{title}</h1>
       {children && <div className="mt-4 max-w-md text-pretty text-[0.9375rem] leading-relaxed text-bone-dim">{children}</div>}
       {action && <div className="mt-10">{action}</div>}
     </div>

@@ -313,9 +313,9 @@ function MonthGrid({
           Checking for changes…
         </span>
       </div>
-      <div role="grid" aria-label="Days with open hours" className="grid grid-cols-7 gap-1">
+      <div role="group" aria-label="Days with open hours. Use arrow keys to move between days." className="grid grid-cols-7 gap-1">
         {["M", "T", "W", "T", "F", "S", "S"].map((d, i) => (
-          <div key={i} role="columnheader" className="pb-2 text-center text-[0.6875rem] text-bone-faint">
+          <div key={i} aria-hidden className="pb-2 text-center text-[0.6875rem] text-bone-faint">
             {d}
           </div>
         ))}
@@ -325,7 +325,7 @@ function MonthGrid({
           const selected = k === dayKey;
           const day = Number(k.slice(8));
           return (
-            <div role="gridcell" key={k} className="aspect-square">
+            <div key={k} className="aspect-square">
               {inRange ? (
                 <button
                   ref={(el) => {
@@ -361,9 +361,7 @@ function MonthGrid({
                   </span>
                 </button>
               ) : (
-                <span className="flex h-full w-full items-center justify-center text-sm text-bone-ghost/50" aria-hidden>
-                  {k < todayKey ? "" : Number(k.slice(8))}
-                </span>
+                <span className="block h-full w-full" aria-hidden />
               )}
             </div>
           );

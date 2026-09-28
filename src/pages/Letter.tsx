@@ -54,7 +54,7 @@ export default function Letter() {
           </div>
         ) : !user || !letter ? (
           <div className="py-20 text-center">
-            <p className="font-serif text-3xl text-bone">This letter isn't here.</p>
+            <h1 className="font-serif text-3xl text-bone">This letter isn't here.</h1>
             <p className="mt-3 text-bone-dim">Letters can only be opened by the person who wrote them.</p>
             <Link to="/record" className="mt-8 inline-block text-sm text-copper-bright underline underline-offset-4">
               Return to your record
@@ -69,7 +69,10 @@ export default function Letter() {
             </p>
           </div>
         ) : (
-          <article>
+          <article aria-labelledby="letter-title">
+            <h1 id="letter-title" className="sr-only">
+              Your letter to yourself
+            </h1>
             <p className="eyebrow opacity-0 animate-fade-in" style={{ animationDelay: "200ms" }}>
               Written {fmt(letter.created_at, tz, "d MMMM yyyy")}
               {guide && session && ` · before your session with ${guide.name.split(" ")[0]} on ${fmt(session.starts_at, tz, "d MMMM")}`}

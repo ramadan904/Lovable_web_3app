@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { prefersReducedMotion } from "@/lib/utils";
 
 /**
  * Cross-fades between keyed views: the old one leaves quietly before the new
@@ -15,13 +16,14 @@ export function FadeSwap({ viewKey, children, onSwap }: { viewKey: string | numb
 
   useEffect(() => {
     if (!leaving) return;
+    // With reduced motion, the new view arrives at once; there is nothing to wait for.
     const t = setTimeout(() => {
       setDisplayKey(viewKey);
       onSwap?.();
       requestAnimationFrame(() => {
         ref.current?.querySelector<HTMLElement>("[data-autofocus]")?.focus({ preventScroll: true });
       });
-    }, 320);
+    }, prefersReducedMotion() ? 0 : 320);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewKey, leaving]);

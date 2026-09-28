@@ -152,7 +152,7 @@ function GuideWeek({ guide }: { guide: Guide }) {
 
         <div className="mb-6 flex flex-wrap items-center gap-x-6 gap-y-3 text-xs text-bone-faint">
           <Legend swatch="bg-bone/[0.05] ring-1 ring-inset ring-bone/10" label="Available" />
-          <Legend swatch="bg-copper/80" label="Session" />
+          <Legend swatch="bg-copper" label="Session" />
           <Legend swatch="buffer-hatch" label="Stillness — prepare / rest (cannot be booked)" />
           <span className="ml-auto flex items-center gap-4">
             <span className="tabular-nums">
@@ -165,7 +165,12 @@ function GuideWeek({ guide }: { guide: Guide }) {
         </div>
 
         {/* Week grid (md+) */}
-        <div className={cn("hidden overflow-hidden rounded-lg border border-bone/[0.08] transition-opacity duration-500 md:block", briefings.isFetching && "opacity-70")}>
+        <div className="relative hidden overflow-hidden rounded-lg border border-bone/[0.08] md:block" aria-busy={briefings.isFetching}>
+          {/* Loading is a line of light along the top edge — never a dimmed, harder-to-read calendar. */}
+          <div
+            className={cn("copper-line pointer-events-none absolute inset-x-0 top-0 z-20 h-px transition-opacity duration-700", briefings.isFetching ? "animate-breathe opacity-100" : "opacity-0")}
+            aria-hidden
+          />
           <div className="grid grid-cols-[3.5rem_repeat(7,minmax(0,1fr))] border-b border-bone/[0.08] bg-charcoal-850">
             <div />
             {days.map((k) => {
@@ -176,7 +181,7 @@ function GuideWeek({ guide }: { guide: Guide }) {
                   <p className={cn("text-xs", k === todayKey ? "text-copper-bright" : "text-bone-faint")}>{fmt(zonedInstant(k, "12:00", tz), tz, "EEE")}</p>
                   <p className="flex items-baseline justify-between font-serif text-2xl text-bone">
                     {Number(k.slice(8))}
-                    {full && <span className="font-sans text-[0.625rem] uppercase tracking-wider text-copper-bright/80">Full</span>}
+                    {full && <span className="font-sans text-[0.625rem] uppercase tracking-wider text-copper-bright">Full</span>}
                   </p>
                 </div>
               );
@@ -216,14 +221,17 @@ function GuideWeek({ guide }: { guide: Guide }) {
                     const be = em + s.buffer_after_min;
                     const past = end < now;
                     return (
-                      <div key={s.id} className={cn(past && "opacity-45")}>
-                        <div className="buffer-hatch absolute inset-x-1.5 rounded-t-sm" style={{ top: y(bs), height: y(sm) - y(bs) }}>
+                      <div key={s.id}>
+                        <div className={cn("buffer-hatch absolute inset-x-1.5 rounded-t-sm", past && "opacity-40")} style={{ top: y(bs), height: y(sm) - y(bs) }}>
                           <span className="absolute left-1.5 top-1 text-[0.5625rem] uppercase tracking-wider text-copper-bright/80">Prepare</span>
                         </div>
                         <button
                           type="button"
                           onClick={() => setOpen(s)}
-                          className="group absolute inset-x-1.5 overflow-hidden bg-copper/80 px-2 py-1.5 text-left text-charcoal-950 transition-[background-color,box-shadow] duration-500 hover:bg-copper-bright focus-visible:outline-offset-2"
+                          className={cn(
+                            "group absolute inset-x-1.5 overflow-hidden px-2 py-1.5 text-left transition-[background-color,box-shadow] duration-500 focus-visible:outline-offset-2",
+                            past ? "bg-charcoal-700 text-bone-dim hover:bg-charcoal-700/70" : "bg-copper text-charcoal-950 hover:bg-copper-bright",
+                          )}
                           style={{ top: y(sm), height: y(em) - y(sm) }}
                           aria-label={`${s.client_name}, ${fmtTime(start, tz)} to ${fmtTime(end, tz)}. Open briefing.`}
                         >
@@ -231,9 +239,9 @@ function GuideWeek({ guide }: { guide: Guide }) {
                             {fmtTime(start, tz)}–{fmtTime(end, tz)}
                           </span>
                           <span className="block truncate font-serif text-base leading-tight">{s.client_name}</span>
-                          <span className="block truncate text-[0.6875rem] opacity-80">{thresholdOf(s.threshold_slug)?.name ?? "Threshold"}</span>
+                          <span className="block truncate text-[0.6875rem]">{thresholdOf(s.threshold_slug)?.name ?? "Threshold"}</span>
                         </button>
-                        <div className="buffer-hatch absolute inset-x-1.5 rounded-b-sm" style={{ top: y(em), height: y(be) - y(em) }}>
+                        <div className={cn("buffer-hatch absolute inset-x-1.5 rounded-b-sm", past && "opacity-40")} style={{ top: y(em), height: y(be) - y(em) }}>
                           <span className="absolute bottom-1 left-1.5 text-[0.5625rem] uppercase tracking-wider text-copper-bright/80">Rest</span>
                         </div>
                       </div>

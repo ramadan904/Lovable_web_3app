@@ -6,6 +6,27 @@
 
 Built with Lovable's stack: **React + Vite + TypeScript + Tailwind + shadcn/ui + Supabase**.
 
+![Threshold — landing](docs/screenshots/01-landing.jpg)
+
+<table>
+  <tr>
+    <td><img src="docs/screenshots/02-guides.jpg" alt="Soft matching: three Guides hold this threshold" /></td>
+    <td><img src="docs/screenshots/03-reflection.jpg" alt="Three questions, asked one at a time" /></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/05-hour.jpg" alt="Choosing the hour, with the Guide's day and the 45-minute stillness drawn to scale" /></td>
+    <td><img src="docs/screenshots/06-letter.jpg" alt="A letter to your future self, sealed for 48 hours after the session" /></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/07-held.jpg" alt="The confirmation: It is held." /></td>
+    <td><img src="docs/screenshots/08-record.jpg" alt="My thresholds: held sessions and letters" /></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/10-guide-week.jpg" alt="A Guide's week, with prepare and rest buffers around every session" /></td>
+    <td><img src="docs/screenshots/11-briefing.jpg" alt="A session briefing — never the letter" /></td>
+  </tr>
+</table>
+
 ---
 
 ## Run it
@@ -22,7 +43,7 @@ With no Supabase credentials, Threshold runs a **self-contained seeded demo**. I
 | Client | `ines@threshold.demo` | `threshold` | One threshold crossed, one held, one letter unsealed, one sealed |
 | Guide | `mara@threshold.demo` | `threshold` | Her week, buffers, and each client's briefing |
 
-Both are also one-tap buttons on `/login`. The footer has a **Reset the demo** link.
+Both are also one-tap buttons on `/login`. In demo mode a small **Demo guide** panel (bottom-left) offers the four paths worth seeing — the ritual, a client's record, an unsealed letter, a Guide's week — plus a reset. It stays out of the ritual and the letter view.
 
 ### A 60‑second demo path
 
@@ -77,7 +98,19 @@ The draft is kept on the device (it survives a reload or an email confirmation) 
 
 **`book_session()`** is atomic and locks the Guide row. It checks auth, notice, the 15‑minute grid, that the whole span *including buffers* fits one availability window in the Guide's timezone, clashes, the daily limit and client overlap. The exclusion constraint backs it up if two bookings race. It returns stable error codes (`slot_taken`, `day_full`, `too_soon`, …) that the UI turns into plain language.
 
-### Connect a real Supabase project
+### Run against Supabase locally (Docker)
+
+```bash
+npx supabase start          # applies supabase/migrations + supabase/seed.sql
+# copy the printed API URL + anon key into .env.local:
+#   VITE_SUPABASE_URL=http://127.0.0.1:54321
+#   VITE_SUPABASE_PUBLISHABLE_KEY=<anon key>
+npm run dev
+```
+
+The whole ritual — GoTrue sign-up, `book_session`, sealed letters, a slot taken by a second real user mid-ritual, cancellation, the Guide calendar — has been walked end-to-end in a browser against this stack. supabase-js is code-split: it loads only when a backend is configured, and the demo build never ships it.
+
+### Connect a hosted Supabase project
 
 1. Run `supabase/migrations/*.sql`, then `supabase/seed.sql`, in the SQL editor (or `supabase db reset` locally). Lovable's Supabase integration also accepts these migrations.
 2. Copy `.env.example` to `.env` and set `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`.
@@ -92,7 +125,10 @@ The seed places every session relative to `now()` on real open days, so the prod
 ```bash
 npm test          # slot engine, DST, cross‑timezone grouping, demo store parity, matching
 npm run test:db   # schema + RLS + booking RPC against Postgres (needs PGHOST/PGPORT/PGUSER)
+npm run e2e       # Playwright: the ritual, a mid-ritual clash, release, Guide briefing — desktop + mobile
 ```
+
+CI (`.github/workflows/ci.yml`) runs all three on every push, and checks that `supabase/seed.sql` is in sync with its TypeScript source.
 
 `supabase/tests/booking_rls.sql` runs 40+ assertions against plain Postgres using a small Supabase auth stub. For example: guests can't see sessions, a Guide can never read a letter, a sealed letter comes back without its body, a slot 75 min after a session is refused but one 90 min after is accepted, and a clash raises `slot_taken` even on direct table writes.
 
@@ -106,7 +142,7 @@ npm run test:db   # schema + RLS + booking RPC against Postgres (needs PGHOST/PG
 - **Type:** *Instrument Serif* (slightly condensed) for headings and letters, *Inter* for UI.
 - **Motion:** fades, gentle height changes and a line of light, and nothing else. `prefers-reduced-motion` is respected.
 - **Visual grammar:** buffers are always drawn with the same copper hatch ("stillness"), so the rule reads the same everywhere: landing page, forms, calendar, record and Guide week.
-- **Accessibility:** native radio groups for every choice, roving‑focus date grid, focus moves to each step's heading, a skip link, `aria-live` notices, and AA‑contrast text.
+- **Accessibility:** native radio groups for every choice, an arrow-key date picker, focus moves to each step's heading, a skip link, `aria-live` notices, and `prefers-reduced-motion` honoured everywhere (steps swap instantly, nothing waits on an animation). axe-core reports **zero WCAG 2.1 AA violations across every route and every ritual step, desktop and mobile**, and `e2e/a11y.spec.ts` keeps it that way in CI. Even the quietest text tier is tuned to pass AA on every surface.
 
 ---
 

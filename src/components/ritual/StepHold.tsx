@@ -198,7 +198,7 @@ export function StepHold({
                   aria-describedby="password-hint"
                 />
                 {mode === "create" && (
-                  <p id="password-hint" className={cn("mt-2 text-xs text-bone-faint transition-opacity", password && password.length < 8 ? "opacity-100" : "opacity-60")}>
+                  <p id="password-hint" className={cn("mt-2 text-xs transition-colors duration-500", password && password.length < 8 ? "text-copper-bright" : "text-bone-faint")}>
                     At least eight characters.
                   </p>
                 )}
