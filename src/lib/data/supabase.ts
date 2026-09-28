@@ -14,6 +14,8 @@ const BOOKING_CODES: BookingErrorCode[] = [
   "day_full",
   "client_overlap",
   "slot_taken",
+  "not_reschedulable",
+  "too_late",
 ];
 
 function toBookingError(message: string | undefined): BookingError {
@@ -170,6 +172,11 @@ export function createSupabaseApi(sb: SupabaseClient<Database>): ThresholdApi {
 
     async openLetter(letterId) {
       await sb.rpc("open_letter", { p_letter_id: letterId });
+    },
+
+    async reschedule(sessionId, startsAt) {
+      const { error } = await sb.rpc("reschedule_session", { p_session_id: sessionId, p_starts_at: startsAt });
+      if (error) throw toBookingError(error.message);
     },
 
     async cancelSession(sessionId) {

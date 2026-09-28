@@ -78,6 +78,9 @@ export interface Session {
   client_timezone: string;
   created_at: string;
   cancelled_at: string | null;
+  /** The original start, if the client has moved the session themselves. */
+  rescheduled_from: string | null;
+  rescheduled_at: string | null;
 }
 
 export interface LetterEnvelope {
@@ -127,6 +130,8 @@ export type BookingErrorCode =
   | "day_full"
   | "client_overlap"
   | "slot_taken"
+  | "not_reschedulable"
+  | "too_late"
   | "unknown";
 
 export class BookingError extends Error {

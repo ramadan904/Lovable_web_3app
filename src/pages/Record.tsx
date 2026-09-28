@@ -133,6 +133,7 @@ export default function Record() {
                   {...lookup(s)}
                   tz={tz}
                   now={now}
+                  hasLetter={!!letters.data?.some((l) => l.session_id === s.id)}
                   onRelease={() => release.mutate(s.id)}
                   releasing={release.isPending && release.variables === s.id}
                 />

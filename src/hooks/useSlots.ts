@@ -24,7 +24,7 @@ export function useBusy(guideId: string | null) {
   });
 }
 
-export function useGuideSlots(guide: Guide | null | undefined, durationMin: number | null) {
+export function useGuideSlots(guide: Guide | null | undefined, durationMin: number | null, ignoreStart: string | null = null) {
   const availability = useAvailability(guide?.id ?? null);
   const busy = useBusy(guide?.id ?? null);
   const now = useNow(60_000);
@@ -37,10 +37,11 @@ export function useGuideSlots(guide: Guide | null | undefined, durationMin: numb
       maxPerDay: guide.max_sessions_per_day,
       rules: availability.data,
       durationMin,
-      busy: busy.data,
+      // When moving a session, its own span must not block the hours around it.
+      busy: ignoreStart ? busy.data.filter((b) => new Date(b.starts_at).getTime() !== new Date(ignoreStart).getTime()) : busy.data,
       now,
     });
-  }, [guide, durationMin, availability.data, busy.data, now]);
+  }, [guide, durationMin, availability.data, busy.data, now, ignoreStart]);
 
   return {
     result,

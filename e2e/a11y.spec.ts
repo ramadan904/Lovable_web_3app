@@ -61,3 +61,15 @@ test("no WCAG AA violations in a client record, a letter and a Guide's week", as
   await expect(page.getByRole("heading", { name: "Mara's week" })).toBeVisible();
   await expectAccessible(page);
 });
+
+test("no WCAG AA violations while moving a session", async ({ page }) => {
+  await page.goto("/login");
+  await page.getByRole("button", { name: /Enter as Inês/ }).click();
+  await page.waitForURL("**/record");
+  await page.getByRole("button", { name: "What happens next" }).first().click();
+  await expectAccessible(page);
+  await page.getByRole("link", { name: "Move this time" }).first().click();
+  await expect(page.getByRole("heading", { name: "Choose a new hour." })).toBeVisible();
+  await page.getByRole("radio").first().click();
+  await expectAccessible(page);
+});

@@ -1,12 +1,15 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { CalendarPlus, ChevronDown } from "lucide-react";
+import { AutomationList } from "@/components/threshold/Handled";
 import { SpanDiagram } from "@/components/threshold/SpanDiagram";
+import { automationsFor } from "@/lib/automations";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useMyAnswers } from "@/hooks/useMine";
 import { buildIcs, downloadIcs } from "@/lib/ics";
-import { cityOf, durationWords, fmt, fmtTime, relativeFromNow } from "@/lib/time";
+import { MIN_NOTICE_HOURS, cityOf, durationWords, fmt, fmtTime, relativeFromNow } from "@/lib/time";
 import type { Guide, Session, SessionType, Threshold } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -19,6 +22,7 @@ export function SessionCard({
   now,
   onRelease,
   releasing,
+  hasLetter = false,
 }: {
   session: Session;
   guide: Guide | undefined;
@@ -28,8 +32,10 @@ export function SessionCard({
   now: Date;
   onRelease: () => void;
   releasing: boolean;
+  hasLetter?: boolean;
 }) {
   const [showAnswers, setShowAnswers] = useState(false);
+  const [showNext, setShowNext] = useState(false);
   const [confirm, setConfirm] = useState(false);
   const answers = useMyAnswers(session.id, showAnswers);
   const start = new Date(session.starts_at);
@@ -38,6 +44,7 @@ export function SessionCard({
   const firstName = guide?.name.split(" ")[0] ?? "Your Guide";
   const bufferStart = new Date(start.getTime() - session.buffer_before_min * 60_000);
   const bufferEnd = new Date(end.getTime() + session.buffer_after_min * 60_000);
+  const movable = start.getTime() > now.getTime() + MIN_NOTICE_HOURS * 3600_000;
 
   return (
     <article
@@ -68,6 +75,11 @@ export function SessionCard({
             {fmtTime(start, tz)}–{fmtTime(end, tz)} {cityOf(tz)}
             {guide && cityOf(guide.timezone) !== cityOf(tz) && ` · ${fmtTime(start, guide.timezone)} for ${firstName} in ${guide.location}`}
           </p>
+          {session.rescheduled_from && (
+            <p className="mt-1 text-sm text-bone-faint">
+              Moved from {fmt(session.rescheduled_from, tz, "EEE d MMM, HH:mm")} — {firstName} has the new time.
+            </p>
+          )}
 
           <SpanDiagram
             className="mt-8 max-w-xl"
@@ -105,16 +117,50 @@ export function SessionCard({
               What you told {firstName}
               <ChevronDown className={cn("h-3.5 w-3.5 transition-transform duration-500", showAnswers && "rotate-180")} aria-hidden />
             </button>
+            <button
+              type="button"
+              aria-expanded={showNext}
+              aria-controls={`next-${session.id}`}
+              onClick={() => setShowNext((v) => !v)}
+              className="inline-flex items-center gap-1.5 text-sm text-bone-dim transition-colors duration-500 hover:text-bone"
+            >
+              What happens next
+              <ChevronDown className={cn("h-3.5 w-3.5 transition-transform duration-500", showNext && "rotate-180")} aria-hidden />
+            </button>
             {!live && (
-              <button
-                type="button"
-                onClick={() => setConfirm(true)}
-                disabled={releasing}
-                className="text-sm text-bone-faint underline decoration-transparent underline-offset-4 transition-colors duration-500 hover:text-bone-dim hover:decoration-bone/30 md:ml-auto"
-              >
-                {releasing ? "Releasing…" : "Release this time"}
-              </button>
+              <span className="flex items-center gap-5 md:ml-auto">
+                {movable && (
+                  <Link
+                    to={`/record/${session.id}/move`}
+                    className="text-sm text-bone-dim underline decoration-bone/20 underline-offset-4 transition-colors duration-500 hover:text-bone hover:decoration-copper/70"
+                  >
+                    Move this time
+                  </Link>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setConfirm(true)}
+                  disabled={releasing}
+                  className="text-sm text-bone-faint underline decoration-transparent underline-offset-4 transition-colors duration-500 hover:text-bone-dim hover:decoration-bone/30"
+                >
+                  {releasing ? "Releasing…" : "Release this time"}
+                </button>
+              </span>
             )}
+          </div>
+
+          <div
+            id={`next-${session.id}`}
+            className={cn("grid transition-[grid-template-rows,opacity] duration-700 ease-quiet", showNext ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0")}
+          >
+            <div className="overflow-hidden">
+              <div className="mt-8 border-t border-bone/[0.07] pt-8">
+                <p className="mb-6 max-w-lg text-sm leading-relaxed text-bone-faint">
+                  Nothing here needs you, or {firstName}. It happens on its own, and moves if you move the session.
+                </p>
+                <AutomationList items={automationsFor(session, { guideName: guide?.name ?? "Your Guide", hasLetter, now }).filter((a) => a.audience === "client")} tz={tz} />
+              </div>
+            </div>
           </div>
 
           <div

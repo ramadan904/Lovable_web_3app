@@ -12,6 +12,7 @@ export function SpanDiagram({
   times,
   className,
   active = true,
+  sessionLabel = "Your session",
 }: {
   durationMin: number;
   bufferMin?: number;
@@ -20,6 +21,7 @@ export function SpanDiagram({
   times?: { prepare: string; start: string; end: string; rest: string };
   className?: string;
   active?: boolean;
+  sessionLabel?: string;
 }) {
   const total = durationMin + bufferMin * 2;
   const pct = (m: number) => `${(m / total) * 100}%`;
@@ -53,7 +55,7 @@ export function SpanDiagram({
           </div>
           <div style={{ width: pct(held) }} className="px-2">
             {times ? <span className="block text-bone tabular-nums">{times.start}</span> : null}
-            {practicalMin ? `Held · ${held} min` : `Your session · ${durationMin} min`}
+            {practicalMin ? `Held · ${held} min` : `${sessionLabel} · ${durationMin} min`}
           </div>
           {practicalMin > 0 && (
             <div style={{ width: pct(practicalMin) }} className="px-2">

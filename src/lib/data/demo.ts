@@ -200,6 +200,8 @@ export async function buildSeed(now: Date = new Date()): Promise<DemoDB> {
       client_timezone: seed.client_timezone,
       created_at: new Date(Math.min(now.getTime(), start.getTime()) - 12 * 24 * HOUR).toISOString(),
       cancelled_at: null,
+      rescheduled_from: null,
+      rescheduled_at: null,
     });
 
     seed.answers.forEach((answer, i) =>
@@ -230,6 +232,57 @@ export async function buildSeed(now: Date = new Date()): Promise<DemoDB> {
 
 function pick(u: { id: string; email: string; display_name: string; timezone: string }) {
   return { id: u.id, email: u.email, display_name: u.display_name, timezone: u.timezone };
+}
+
+// ---------------------------------------------------------------------------
+// The one validator — mirrors public.assert_slot_open() in the database.
+// ---------------------------------------------------------------------------
+
+function assertSlotOpen(live: DemoDB, guide: Guide, start: Date, durationMin: number, clientId: string, excludeId: string | null) {
+  const now = Date.now();
+  if (start.getTime() < now + MIN_NOTICE_HOURS * HOUR) throw new BookingError("too_soon");
+  if (start.getTime() > now + 60 * 24 * HOUR) throw new BookingError("too_far");
+  if (start.getUTCSeconds() !== 0 || start.getUTCMinutes() % 15 !== 0) throw new BookingError("off_grid");
+
+  const end = new Date(start.getTime() + durationMin * MINUTE);
+  const bStart = start.getTime() - guide.buffer_min * MINUTE;
+  const bEnd = end.getTime() + guide.buffer_min * MINUTE;
+  const localKeyStart = dateKeyInZone(new Date(bStart), guide.timezone);
+  const localKeyEnd = dateKeyInZone(new Date(bEnd), guide.timezone);
+  const localMin = (t: number) => {
+    const [h, m] = new Intl.DateTimeFormat("en-GB", { timeZone: guide.timezone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" })
+      .format(new Date(t))
+      .split(":")
+      .map(Number);
+    return h * 60 + m;
+  };
+  const weekday = new Date(`${localKeyStart}T12:00:00Z`).getUTCDay();
+  const inWindow =
+    localKeyStart === localKeyEnd &&
+    live.availability.some(
+      (r) =>
+        r.guide_id === guide.id &&
+        r.weekday === weekday &&
+        toMinutes(r.start_local) <= localMin(bStart) &&
+        toMinutes(r.end_local) >= localMin(bEnd),
+    );
+  if (!inWindow) throw new BookingError("outside_availability");
+
+  const others = live.sessions.filter((s) => s.status !== "cancelled" && s.id !== excludeId);
+  const guideSessions = others.filter((s) => s.guide_id === guide.id);
+  const clash = guideSessions.some((s) => {
+    const sb = new Date(s.starts_at).getTime() - s.buffer_before_min * MINUTE;
+    const se = new Date(s.ends_at).getTime() + s.buffer_after_min * MINUTE;
+    return bStart < se && sb < bEnd;
+  });
+  if (clash) throw new BookingError("slot_taken");
+  const dayKey = dateKeyInZone(start, guide.timezone);
+  if (guideSessions.filter((s) => dateKeyInZone(new Date(s.starts_at), guide.timezone) === dayKey).length >= guide.max_sessions_per_day) {
+    throw new BookingError("day_full");
+  }
+  if (others.some((s) => s.client_id === clientId && start < new Date(s.ends_at) && new Date(s.starts_at) < end)) {
+    throw new BookingError("client_overlap");
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -266,6 +319,21 @@ export function createDemoApi(): ThresholdApi {
 
   function persist() {
     if (db) safeStorage.set(DB_KEY, JSON.stringify(db));
+  }
+
+  /** Re-read the store so writes from another tab are seen (the "already booked" case). */
+  async function fresh(): Promise<DemoDB> {
+    const d = await load();
+    const raw = safeStorage.get(DB_KEY);
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw) as DemoDB;
+        if (parsed.version === SEED_VERSION) db = parsed;
+      } catch {
+        /* keep memory copy */
+      }
+    }
+    return db ?? d;
   }
 
   function currentUserId(): string | null {
@@ -402,21 +470,10 @@ export function createDemoApi(): ThresholdApi {
     },
 
     async book(input: BookingInput) {
-      const d = await load();
+      await load();
       const user = await requireMe();
       await wait(650 + Math.random() * 350);
-
-      // Pick up bookings made elsewhere since this tab loaded.
-      const fresh = safeStorage.get(DB_KEY);
-      if (fresh) {
-        try {
-          const parsed = JSON.parse(fresh) as DemoDB;
-          if (parsed.version === SEED_VERSION) db = parsed;
-        } catch {
-          /* keep memory copy */
-        }
-      }
-      const live = db ?? d;
+      const live = await fresh();
 
       const guide = live.guides.find((g) => g.id === input.guide_id);
       if (!guide || !guide.accepting) throw new BookingError("guide_unavailable");
@@ -424,51 +481,8 @@ export function createDemoApi(): ThresholdApi {
       if (!type) throw new BookingError("unknown_form");
 
       const start = new Date(input.starts_at);
-      const now = Date.now();
-      if (start.getTime() < now + MIN_NOTICE_HOURS * HOUR) throw new BookingError("too_soon");
-      if (start.getTime() > now + 60 * 24 * HOUR) throw new BookingError("too_far");
-      if (start.getUTCSeconds() !== 0 || start.getUTCMinutes() % 15 !== 0) throw new BookingError("off_grid");
-
+      assertSlotOpen(live, guide, start, type.duration_min, user.id, null);
       const end = new Date(start.getTime() + type.duration_min * MINUTE);
-      const bStart = start.getTime() - guide.buffer_min * MINUTE;
-      const bEnd = end.getTime() + guide.buffer_min * MINUTE;
-      const localKeyStart = dateKeyInZone(new Date(bStart), guide.timezone);
-      const localKeyEnd = dateKeyInZone(new Date(bEnd), guide.timezone);
-      const localMin = (t: number) => {
-        const [h, m] = new Intl.DateTimeFormat("en-GB", { timeZone: guide.timezone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" })
-          .format(new Date(t))
-          .split(":")
-          .map(Number);
-        return h * 60 + m;
-      };
-      const weekday = new Date(`${localKeyStart}T12:00:00Z`).getUTCDay();
-      const inWindow =
-        localKeyStart === localKeyEnd &&
-        live.availability.some(
-          (r) =>
-            r.guide_id === guide.id &&
-            r.weekday === weekday &&
-            toMinutes(r.start_local) <= localMin(bStart) &&
-            toMinutes(r.end_local) >= localMin(bEnd),
-        );
-      if (!inWindow) throw new BookingError("outside_availability");
-
-      const guideSessions = live.sessions.filter((s) => s.guide_id === guide.id && s.status !== "cancelled");
-      const clash = guideSessions.some((s) => {
-        const sb = new Date(s.starts_at).getTime() - s.buffer_before_min * MINUTE;
-        const se = new Date(s.ends_at).getTime() + s.buffer_after_min * MINUTE;
-        return bStart < se && sb < bEnd;
-      });
-      if (clash) throw new BookingError("slot_taken");
-      const dayKey = dateKeyInZone(start, guide.timezone);
-      if (guideSessions.filter((s) => dateKeyInZone(new Date(s.starts_at), guide.timezone) === dayKey).length >= guide.max_sessions_per_day) {
-        throw new BookingError("day_full");
-      }
-
-      const mine = live.sessions.filter((s) => s.client_id === user.id && s.status !== "cancelled");
-      if (mine.some((s) => start < new Date(s.ends_at) && new Date(s.starts_at) < end)) {
-        throw new BookingError("client_overlap");
-      }
 
       const id = uuid();
       live.sessions.push({
@@ -487,6 +501,8 @@ export function createDemoApi(): ThresholdApi {
         client_timezone: input.client_timezone,
         created_at: new Date().toISOString(),
         cancelled_at: null,
+        rescheduled_from: null,
+        rescheduled_at: null,
       });
       for (const a of input.answers) {
         live.answers.push({ ...a, answer: a.answer?.trim() || null, session_id: id, client_id: user.id });
@@ -562,6 +578,30 @@ export function createDemoApi(): ThresholdApi {
         l.opened_at = new Date().toISOString();
         persist();
       }
+    },
+
+    async reschedule(sessionId, startsAt) {
+      await load();
+      const user = await requireMe();
+      await wait(600 + Math.random() * 300);
+      const live = await fresh();
+      const session = live.sessions.find((x) => x.id === sessionId && x.client_id === user.id && x.status === "held");
+      if (!session) throw new BookingError("not_reschedulable");
+      if (new Date(session.starts_at).getTime() < Date.now() + MIN_NOTICE_HOURS * HOUR) throw new BookingError("too_late");
+      const guide = live.guides.find((g) => g.id === session.guide_id)!;
+      const duration = (new Date(session.ends_at).getTime() - new Date(session.starts_at).getTime()) / MINUTE;
+      const start = new Date(startsAt);
+      if (start.getTime() === new Date(session.starts_at).getTime()) return;
+      assertSlotOpen(live, guide, start, duration, user.id, session.id);
+      const end = new Date(start.getTime() + duration * MINUTE);
+      session.rescheduled_from = session.rescheduled_from ?? session.starts_at;
+      session.rescheduled_at = new Date().toISOString();
+      session.starts_at = start.toISOString();
+      session.ends_at = end.toISOString();
+      const letter = live.letters.find((l) => l.session_id === session.id);
+      if (letter) letter.unlocks_at = new Date(end.getTime() + LETTER_SEAL_HOURS * HOUR).toISOString();
+      db = live;
+      persist();
     },
 
     async cancelSession(sessionId) {

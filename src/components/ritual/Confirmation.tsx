@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { buildIcs, downloadIcs } from "@/lib/ics";
 import { cityOf, fmt, fmtTime } from "@/lib/time";
 import type { Guide, SessionType } from "@/lib/types";
+import { capitalize, pronounsOf } from "@/lib/utils";
 
 /**
  * Not a checkmark. The room dims, a line of light crosses it, and the words
@@ -31,8 +32,9 @@ export function Confirmation({
 }) {
   const heading = useRef<HTMLHeadingElement>(null);
   const firstName = guide.name.split(" ")[0];
-  const pronoun = guide.pronouns?.startsWith("she") ? "She" : guide.pronouns?.startsWith("he") ? "He" : "They";
-  const verb = pronoun === "They" ? ["arrive", "stay"] : ["arrives", "stays"];
+  const p = pronounsOf(guide.pronouns);
+  const pronoun = capitalize(p.subject);
+  const verb = p.plural ? ["arrive", "stay"] : ["arrives", "stays"];
 
   useEffect(() => {
     const t = setTimeout(() => heading.current?.focus({ preventScroll: true }), 1400);

@@ -19,6 +19,7 @@ import { api } from "@/lib/data";
 import { REFLECTIVE_PROMPTS } from "@/lib/data/seed";
 import { LETTER_SEAL_HOURS, fmt } from "@/lib/time";
 import { BookingError, type Guide, type SessionType } from "@/lib/types";
+import { pronounsOf } from "@/lib/utils";
 
 interface Held {
   sessionId: string;
@@ -124,7 +125,7 @@ export default function Begin() {
           toTime(`While you were writing, ${when} was given to someone else. Nothing you wrote is lost — everything is exactly as you left it. These are the hours that remain.`);
           break;
         case "day_full":
-          toTime(`${firstName} has just reached the limit of what they hold on that day. Nothing you wrote is lost. These are the hours that remain.`);
+          toTime(`${firstName} has just reached the limit of what ${guide ? pronounsOf(guide.pronouns).subject : "they"} ${guide && !pronounsOf(guide.pronouns).plural ? "holds" : "hold"} on that day. Nothing you wrote is lost. These are the hours that remain.`);
           break;
         case "too_soon":
           toTime(`${when} is now less than a day away, and Guides need a day to prepare. Nothing you wrote is lost.`);

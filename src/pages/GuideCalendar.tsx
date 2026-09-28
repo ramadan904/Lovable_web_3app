@@ -6,6 +6,8 @@ import { toast } from "sonner";
 import { PageShell } from "@/components/brand/PageShell";
 import { GuideMark } from "@/components/brand/GuideMark";
 import { EmptyState } from "@/components/threshold/EmptyState";
+import { AutomationList, HandledTiles } from "@/components/threshold/Handled";
+import { automationsFor, ledgerFor } from "@/lib/automations";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -149,6 +151,8 @@ function GuideWeek({ guide }: { guide: Guide }) {
             </Button>
           </div>
         </header>
+
+        <HandledTiles ledger={ledgerFor(briefings.data?.filter((s) => new Date(s.starts_at) >= from && new Date(s.starts_at) < to) ?? [], now)} demo={api.mode === "demo"} />
 
         <div className="mb-6 flex flex-wrap items-center gap-x-6 gap-y-3 text-xs text-bone-faint">
           <Legend swatch="bg-bone/[0.05] ring-1 ring-inset ring-bone/10" label="Available" />
@@ -349,6 +353,12 @@ function Briefing({
         {thresholdName ?? "A threshold in their own words"} · {formName} · {durationWords(duration ?? 90)}
       </DialogDescription>
 
+      {s.rescheduled_from && (
+        <p className="mt-6 text-sm text-bone-faint">
+          Moved by {s.client_name} from {fmt(s.rescheduled_from, tz, "EEE d MMM, HH:mm")}. Nothing needed from you — your calendar and buffers were updated.
+        </p>
+      )}
+
       {s.threshold_words && (
         <blockquote className="mt-8 border-l border-copper/60 pl-5 font-serif text-xl italic leading-snug text-bone/90">“{s.threshold_words}”</blockquote>
       )}
@@ -391,6 +401,9 @@ function Briefing({
         ))}
         {s.answers.length === 0 && <p className="text-sm text-bone-faint">No answers were written.</p>}
       </dl>
+
+      <h3 className="mb-6 mt-12 font-serif text-2xl text-bone">Handled for you</h3>
+      <AutomationList items={automationsFor(s, { guideName: guide.name, forGuide: true, now })} tz={tz} />
 
       <p className="mt-12 flex items-start gap-3 rounded-md bg-bone/[0.03] p-4 text-sm leading-relaxed text-bone-faint">
         <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />

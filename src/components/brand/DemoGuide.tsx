@@ -49,7 +49,7 @@ export function DemoGuide() {
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
 
-  if (!enabled || pathname.startsWith("/begin") || pathname.startsWith("/letters")) return null;
+  if (!enabled || pathname.startsWith("/begin") || pathname.startsWith("/letters") || pathname.endsWith("/move")) return null;
 
   const go = async (id: string, fn: () => Promise<unknown>) => {
     setWorking(id);

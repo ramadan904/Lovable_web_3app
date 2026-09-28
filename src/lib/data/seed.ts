@@ -9,7 +9,7 @@
  */
 import type { PresenceType, SessionTypeKey } from "../types";
 
-export const SEED_VERSION = 3;
+export const SEED_VERSION = 4;
 
 export const REFLECTIVE_PROMPTS = [
   {

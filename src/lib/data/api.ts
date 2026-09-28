@@ -37,6 +37,8 @@ export interface ThresholdApi {
   myAnswers(sessionId: string): Promise<ReflectiveAnswer[]>;
   myLetters(): Promise<LetterEnvelope[]>;
   openLetter(letterId: string): Promise<void>;
+  /** Move a held session. Same rules as booking; allowed until 24h before it begins. */
+  reschedule(sessionId: string, startsAt: string): Promise<void>;
   cancelSession(sessionId: string): Promise<void>;
 
   guideBriefings(from: Date, to: Date): Promise<GuideBriefing[]>;

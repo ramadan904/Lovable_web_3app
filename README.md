@@ -22,6 +22,10 @@ Built with Lovable's stack: **React + Vite + TypeScript + Tailwind + shadcn/ui +
     <td><img src="docs/screenshots/08-record.jpg" alt="My thresholds: held sessions and letters" /></td>
   </tr>
   <tr>
+    <td><img src="docs/screenshots/13-before-after.jpg" alt="The same inquiry twice: an email thread vs. Threshold" /></td>
+    <td><img src="docs/screenshots/14-move.jpg" alt="A client moves their own session; the Guide does nothing" /></td>
+  </tr>
+  <tr>
     <td><img src="docs/screenshots/10-guide-week.jpg" alt="A Guide's week, with prepare and rest buffers around every session" /></td>
     <td><img src="docs/screenshots/11-briefing.jpg" alt="A session briefing — never the letter" /></td>
   </tr>
@@ -44,6 +48,8 @@ With no Supabase credentials, Threshold runs a **self-contained seeded demo**. I
 | Guide | `mara@threshold.demo` | `threshold` | Her week, buffers, and each client's briefing |
 
 Both are also one-tap buttons on `/login`. In demo mode a small **Demo guide** panel (bottom-left) offers the four paths worth seeing — the ritual, a client's record, an unsealed letter, a Guide's week — plus a reset. It stays out of the ritual and the letter view.
+
+> Entering the **#LovableChallenge**? The write-up, criteria mapping and a timed walkthrough script are in [`docs/SUBMISSION.md`](docs/SUBMISSION.md).
 
 ### A 60‑second demo path
 
@@ -68,6 +74,12 @@ Both are also one-tap buttons on `/login`. In demo mode a small **Demo guide** p
 | VII | Hold | Review, name, and an inline account. Guests can go through the whole ritual; they only need an account to hold the time. |
 | — | Confirmation | Not a checkmark: the screen dims, a line of light draws, the words arrive one at a time. Exports an `.ics` file. |
 
+### After the booking — the owner does nothing
+
+- **Self-serve moves and releases.** Clients move their own session (`/record/:id/move`) under exactly the same rules as booking — one shared validator in Postgres — until 24 h before it begins. Calendar, buffers and the letter's seal follow automatically; the Guide sees a quiet "moved from" note.
+- **Handled for you.** Every session carries its own schedule — confirmation, briefing, a preparation note 48 h before, a reminder 24 h before, the letter unsealing — which moves when the session moves and is withdrawn if it's released. The Guide's week opens with a ledger of what they didn't have to do. (In the demo these are shown, not emailed.)
+- **Privacy holds here too:** a Guide's view never reveals whether a letter exists.
+
 The draft is kept on the device (it survives a reload or an email confirmation) and cleared once the time is held.
 
 **Edge cases handled on the core path:** a slot taken by someone else mid‑ritual (you return to *The hour* with an explanation and nothing you wrote is lost), a Guide's daily limit, a slot drifting under 24 h notice, double‑booking yourself, a changed timezone, clock changes (DST), cancellation (optimistic, with the letter returned unopened), network errors, private mode (in‑memory fallback), and email‑confirmation sign‑ups.
@@ -85,7 +97,7 @@ The draft is kept on the device (it survives a reload or an email confirmation) 
 | `session_types` | Forms and their durations (duration lives in data, not the client). |
 | `guides` · `guide_thresholds` | Guides, presence type, tags, timezone, `max_sessions_per_day`, `buffer_min ≥ 45`. |
 | `availability_rules` | Weekly windows in the Guide's **local** time. |
-| `sessions` | Type, status, buffers and a `blocked_range tstzrange`, protected by an **exclusion constraint**: no two held spans (buffers included) of one Guide can overlap. |
+| `sessions` | Type, status, buffers, `rescheduled_from`, and a `blocked_range tstzrange`, protected by an **exclusion constraint**: no two held spans (buffers included) of one Guide can overlap. |
 | `reflective_answers` | The three answers (null = "bring it into the room"). |
 | `future_self_letters` | Time‑locked letters. |
 
@@ -96,7 +108,7 @@ The draft is kept on the device (it survives a reload or an email confirmation) 
 - Letters are readable **only by their author, and only once `unlocks_at <= now()`**. No policy lets a Guide read them. `my_letters()` returns sealed envelopes without the body.
 - Nobody can insert or update sessions directly. All writes go through `book_session()` and `cancel_session()`.
 
-**`book_session()`** is atomic and locks the Guide row. It checks auth, notice, the 15‑minute grid, that the whole span *including buffers* fits one availability window in the Guide's timezone, clashes, the daily limit and client overlap. The exclusion constraint backs it up if two bookings race. It returns stable error codes (`slot_taken`, `day_full`, `too_soon`, …) that the UI turns into plain language.
+**`book_session()`** and **`reschedule_session()`** share one validator, `assert_slot_open()` (not callable by clients). Booking is atomic and locks the Guide row. It checks auth, notice, the 15‑minute grid, that the whole span *including buffers* fits one availability window in the Guide's timezone, clashes, the daily limit and client overlap. The exclusion constraint backs it up if two bookings race. It returns stable error codes (`slot_taken`, `day_full`, `too_soon`, …) that the UI turns into plain language.
 
 ### Run against Supabase locally (Docker)
 
@@ -125,12 +137,12 @@ The seed places every session relative to `now()` on real open days, so the prod
 ```bash
 npm test          # slot engine, DST, cross‑timezone grouping, demo store parity, matching
 npm run test:db   # schema + RLS + booking RPC against Postgres (needs PGHOST/PGPORT/PGUSER)
-npm run e2e       # Playwright: the ritual, a mid-ritual clash, release, Guide briefing — desktop + mobile
+npm run e2e       # Playwright: the ritual, a mid-ritual clash, moving and releasing, Guide briefing, axe audits — desktop + mobile
 ```
 
 CI (`.github/workflows/ci.yml`) runs all three on every push, and checks that `supabase/seed.sql` is in sync with its TypeScript source.
 
-`supabase/tests/booking_rls.sql` runs 40+ assertions against plain Postgres using a small Supabase auth stub. For example: guests can't see sessions, a Guide can never read a letter, a sealed letter comes back without its body, a slot 75 min after a session is refused but one 90 min after is accepted, and a clash raises `slot_taken` even on direct table writes.
+`supabase/tests/booking_rls.sql` runs 60+ assertions against plain Postgres using a small Supabase auth stub. For example: guests can't see sessions, a Guide can never read a letter, a sealed letter comes back without its body, a slot 75 min after a session is refused but one 90 min after is accepted, and a clash raises `slot_taken` even on direct table writes.
 
 `src/lib/data/seed.ts` is the single source of truth for demo data. After changing it, run `npm run seed:sql` to regenerate `supabase/seed.sql`.
 

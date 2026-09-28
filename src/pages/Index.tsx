@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { ArrowRight } from "lucide-react";
 import { PageShell } from "@/components/brand/PageShell";
 import { GuideMark } from "@/components/brand/GuideMark";
+import { BeforeAfter, ForGuides } from "@/components/threshold/BeforeAfter";
 import { Doorway } from "@/components/threshold/Doorway";
 import { Reveal } from "@/components/threshold/Reveal";
 import { SealedEnvelope } from "@/components/threshold/SealedEnvelope";
@@ -115,6 +116,8 @@ export default function Index() {
         </div>
       </section>
 
+      <BeforeAfter />
+
       {/* What we hold ----------------------------------------------------- */}
       <section id="hold" className="border-t border-bone/[0.07] py-24 md:py-36">
         <div className="container grid gap-14 md:grid-cols-[0.8fr_1.2fr] md:gap-20">
@@ -220,6 +223,8 @@ export default function Index() {
           </ol>
         </div>
       </section>
+
+      <ForGuides />
 
       {/* Guides -------------------------------------------------------------- */}
       <section className="border-t border-bone/[0.07] bg-charcoal-950/40 py-24 md:py-36">

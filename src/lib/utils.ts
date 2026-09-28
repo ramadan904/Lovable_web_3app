@@ -24,3 +24,13 @@ export function prefersReducedMotion(): boolean {
     return false;
   }
 }
+
+/** Words for a Guide, from the pronouns they gave. Defaults to they/them. */
+export function pronounsOf(pronouns: string | null | undefined) {
+  const p = (pronouns ?? "").toLowerCase();
+  if (p.startsWith("she")) return { subject: "she", possessive: "her", plural: false };
+  if (p.startsWith("he")) return { subject: "he", possessive: "his", plural: false };
+  return { subject: "they", possessive: "their", plural: true };
+}
+
+export const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);

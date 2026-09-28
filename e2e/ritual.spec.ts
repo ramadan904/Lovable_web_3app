@@ -90,6 +90,18 @@ test("an hour taken by someone else mid-ritual returns you to the hour, words in
   expect(draft.answers[0]).toBe("Thirty years of teaching.");
 });
 
+test("a client moves their own session; the Guide needs to do nothing", async ({ page }) => {
+  await page.goto("/login");
+  await page.getByRole("button", { name: /Enter as Inês/ }).click();
+  await page.waitForURL("**/record");
+  await page.getByRole("link", { name: "Move this time" }).first().click();
+  await expect(page.getByRole("heading", { name: "Choose a new hour." })).toBeVisible();
+  await page.getByRole("radio").first().click();
+  await page.getByRole("button", { name: /^Move to / }).click();
+  await page.waitForURL("**/record");
+  await expect(page.getByText(/Moved from .* has the new time/)).toBeVisible();
+});
+
 test("releasing a session returns its letter unopened", async ({ page }) => {
   await page.goto("/login");
   await page.getByRole("button", { name: /Enter as Inês/ }).click();

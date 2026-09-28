@@ -10,6 +10,7 @@ import Index from "./pages/Index";
 const Begin = lazy(() => import("./pages/Begin"));
 const Record = lazy(() => import("./pages/Record"));
 const Letter = lazy(() => import("./pages/Letter"));
+const Move = lazy(() => import("./pages/Move"));
 const Login = lazy(() => import("./pages/Login"));
 const Guides = lazy(() => import("./pages/Guides"));
 const GuideCalendar = lazy(() => import("./pages/GuideCalendar"));
@@ -49,6 +50,7 @@ const App = () => (
               <Route path="/guides" element={<Guides />} />
               <Route path="/record" element={<Record />} />
               <Route path="/letters/:id" element={<Letter />} />
+              <Route path="/record/:id/move" element={<Move />} />
               <Route path="/login" element={<Login />} />
               <Route path="/guide" element={<GuideCalendar />} />
               <Route path="*" element={<NotFound />} />

@@ -92,6 +92,8 @@ export type Database = {
           client_timezone: string;
           created_at: string;
           cancelled_at: string | null;
+          rescheduled_from: string | null;
+          rescheduled_at: string | null;
         };
         Insert: never;
         Update: never;
@@ -141,6 +143,7 @@ export type Database = {
         Returns: string;
       };
       cancel_session: { Args: { p_session_id: string }; Returns: undefined };
+      reschedule_session: { Args: { p_session_id: string; p_starts_at: string }; Returns: undefined };
       my_letters: {
         Args: Record<PropertyKey, never>;
         Returns: {

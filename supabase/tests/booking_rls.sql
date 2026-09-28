@@ -160,6 +160,63 @@ set request.jwt.claim.sub = '00000000-0000-4000-8000-00000000bbbb';
 select pg_temp.check(pg_temp.try_book('10000000-0000-4000-8000-000000000001', ((select day from fx) + time '10:00') at time zone 'Europe/Lisbon', 'solo', null) = 'ok', 'cancel: released time can be held again');
 reset role;
 
+
+-- --- Rescheduling ------------------------------------------------------------
+create or replace function pg_temp.try_move(p_session uuid, p_start timestamptz)
+returns text language plpgsql as $$
+begin
+  perform public.reschedule_session(p_session, p_start);
+  return 'ok';
+exception when others then
+  return sqlerrm;
+end $$;
+grant execute on all functions in schema pg_temp to anon, authenticated;
+
+-- A fresh Tobias day for moves (Mon–Thu 08:00–16:00, Berlin).
+create temp table fx3 as
+select d::date as day
+from generate_series((now() at time zone 'Europe/Berlin')::date + 3, (now() at time zone 'Europe/Berlin')::date + 40, interval '1 day') d
+where extract(dow from d) between 1 and 4
+  and not exists (select 1 from public.sessions s where s.guide_id = '10000000-0000-4000-8000-000000000002' and (s.starts_at at time zone 'Europe/Berlin')::date = d::date)
+order by d limit 1;
+grant select on fx3 to authenticated;
+
+insert into auth.users (id, email, raw_user_meta_data) values ('00000000-0000-4000-8000-00000000cccc', 'c@test', '{}');
+set role authenticated;
+set request.jwt.claim.sub = '00000000-0000-4000-8000-00000000cccc';
+select pg_temp.check(pg_temp.try_book('10000000-0000-4000-8000-000000000002', ((select day from fx3) + time '09:00') at time zone 'Europe/Berlin', 'solo', 'Dear me.') = 'ok', 'move: session to move is held');
+create temp table mv as select id from public.sessions where client_id = '00000000-0000-4000-8000-00000000cccc';
+select pg_temp.check(pg_temp.try_move((select id from mv), ((select day from fx3) + time '13:00') at time zone 'Europe/Berlin') = 'ok', 'move: to a free hour the same day');
+select pg_temp.check((select starts_at = ((select day from fx3) + time '13:00') at time zone 'Europe/Berlin' and rescheduled_from = ((select day from fx3) + time '09:00') at time zone 'Europe/Berlin' from public.sessions where id = (select id from mv)), 'move: new time stored, original kept for the Guide');
+select pg_temp.check((select blocked_range = tstzrange(starts_at - interval '45 min', ends_at + interval '45 min', '[)') from public.sessions where id = (select id from mv)), 'move: buffers follow the session');
+select pg_temp.check((select unlocks_at - (select ends_at from public.sessions where id = (select id from mv)) from public.my_letters()) = interval '48 hours', 'move: letter re-sealed to 48h after the new end');
+select pg_temp.check(pg_temp.try_move((select id from mv), ((select day from fx3) + time '13:30') at time zone 'Europe/Berlin') = 'ok', 'move: overlapping only its own old span is fine');
+select pg_temp.check(pg_temp.try_move((select id from mv), ((select day from fx3) + time '13:10') at time zone 'Europe/Berlin') = 'off_grid', 'move: same rules as booking (grid)');
+select pg_temp.check(pg_temp.try_move((select id from mv), ((select day from fx3) - extract(dow from (select day from fx3))::int + 7 + time '10:00') at time zone 'Europe/Berlin') = 'outside_availability', 'move: same rules as booking (availability)');
+select pg_temp.check(pg_temp.try_move((select id from mv), now() + interval '2 hours') = 'too_soon', 'move: same rules as booking (notice)');
+reset role;
+-- Someone else holds 10:00 the next open day; moving onto its stillness is refused.
+set role authenticated;
+set request.jwt.claim.sub = '00000000-0000-4000-8000-00000000aaaa';
+select pg_temp.check(pg_temp.try_book('10000000-0000-4000-8000-000000000002', ((select day from fx3) + time '09:00') at time zone 'Europe/Berlin', 'solo', null) = 'ok', 'move: another client takes the old hour');
+set request.jwt.claim.sub = '00000000-0000-4000-8000-00000000cccc';
+select pg_temp.check(pg_temp.try_move((select id from mv), ((select day from fx3) + time '11:00') at time zone 'Europe/Berlin') = 'slot_taken', 'move: onto another session''s stillness → slot_taken');
+select pg_temp.check((select starts_at = ((select day from fx3) + time '13:30') at time zone 'Europe/Berlin' from public.sessions where id = (select id from mv)), 'move: a refused move changes nothing');
+set request.jwt.claim.sub = '00000000-0000-4000-8000-00000000aaaa';
+select pg_temp.check(pg_temp.try_move((select id from mv), ((select day from fx3) + time '14:00') at time zone 'Europe/Berlin') = 'not_reschedulable', 'move: nobody moves someone else''s session');
+reset role;
+update public.sessions set starts_at = now() + interval '20 hours', ends_at = now() + interval '21 hours 30 minutes' where id = (select id from mv);
+set role authenticated;
+set request.jwt.claim.sub = '00000000-0000-4000-8000-00000000cccc';
+select pg_temp.check(pg_temp.try_move((select id from mv), ((select day from fx3) + time '14:00') at time zone 'Europe/Berlin') = 'too_late', 'move: within 24h of the session → too_late');
+reset role;
+do $$ begin
+  set local role anon;
+  perform public.reschedule_session(gen_random_uuid(), now() + interval '3 days');
+  raise exception 'FAIL: anon rescheduled';
+exception when insufficient_privilege then raise notice 'ok  move: guests cannot call it';
+end $$;
+
 -- Guides may edit only their own availability.
 set role authenticated;
 set request.jwt.claim.sub = '00000000-0000-4000-8000-0000000000b1';

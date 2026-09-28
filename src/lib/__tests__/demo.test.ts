@@ -57,6 +57,28 @@ describe("demo store", () => {
     await expect(api.book(input)).rejects.toMatchObject({ code: "slot_taken" } satisfies Partial<BookingError>);
   });
 
+  it("moves a session under booking rules, carrying its letter's seal", async () => {
+    await api.signIn(DEMO_USERS.client.email, DEMO_USERS.client.password);
+    const session = (await api.mySessions()).find((s) => new Date(s.starts_at) > new Date())!;
+    const guide = (await api.listGuides()).find((g) => g.id === session.guide_id)!;
+    const rules = await api.listAvailability(guide.id);
+    const busy = (await api.busyRanges(guide.id, new Date(), new Date(Date.now() + 40 * 864e5))).filter((b) => b.starts_at !== session.starts_at);
+    const duration = (+new Date(session.ends_at) - +new Date(session.starts_at)) / 60_000;
+    const slots = generateSlots({ timezone: guide.timezone, bufferMin: 45, maxPerDay: guide.max_sessions_per_day, rules, durationMin: duration, busy, now: new Date() }).slots;
+    const target = slots.find((s) => s.state === "open" && s.start.toISOString() !== session.starts_at)!;
+
+    await api.reschedule(session.id, target.start.toISOString());
+    const moved = (await api.mySessions()).find((s) => s.id === session.id)!;
+    expect(moved.starts_at).toBe(target.start.toISOString());
+    expect(moved.rescheduled_from).toBe(session.starts_at);
+    const letter = (await api.myLetters()).find((l) => l.session_id === session.id)!;
+    expect(+new Date(letter.unlocks_at) - +new Date(moved.ends_at)).toBe(48 * 3600_000);
+
+    const held = slots.find((s) => s.state === "held")!;
+    await expect(api.reschedule(session.id, held.start.toISOString())).rejects.toMatchObject({ code: "slot_taken" });
+    expect((await api.mySessions()).find((s) => s.id === session.id)!.starts_at).toBe(target.start.toISOString());
+  });
+
   it("returns the letter unopened when a session is released", async () => {
     await api.signIn(DEMO_USERS.client.email, DEMO_USERS.client.password);
     const upcoming = (await api.mySessions()).find((s) => new Date(s.starts_at) > new Date())!;
