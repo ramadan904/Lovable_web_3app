@@ -497,3 +497,50 @@ describe("ceramic sealant needs a dry day outdoors to cure", () => {
     expect(() => createJob(emptyState(NOW2), input({ ...base, parking: "driveway", addons: [] }), NOW2)).not.toThrow();
   });
 });
+
+describe("the natural-language box, end to end", () => {
+  const ASK = "My dog wrecked my Outback. I'm in Sellwood. Friday morning?";
+  const NOWFRI = atLocal("2026-09-29", 14 * 60); // Tuesday; Friday is 2 Oct
+
+  it("reads the vehicle, add-on, place (with a zip), day and time of day from your exact example", () => {
+    const p = parseInquiry(ASK, NOWFRI);
+    expect(p).toMatchObject({ vehicle: "suv", service: "interior", zone: "SE", place: "Sellwood", zip: "97202", zipInferred: true, part: "morning", date: "2026-10-02", urgent: false });
+    expect(p.addons).toContain("pet");
+    expect(p.when).toBe("Friday morning");
+  });
+
+  it("notices urgency, and prefers a typed zip to a guessed one", () => {
+    const a = parseInquiry("need my truck washed ASAP, muddy, Beaverton", NOWFRI);
+    expect(a).toMatchObject({ vehicle: "truck", urgent: true, zone: "W", place: "Beaverton", zip: "97005", when: "as soon as possible" });
+    const b = parseInquiry("suv wash in Sellwood 97214 tomorrow", NOWFRI);
+    expect(b).toMatchObject({ zip: "97214", zipInferred: false, when: "tomorrow" });
+  });
+
+  it("puts everything into the booking link, including a zip, so nothing has to be retyped", async () => {
+    const { bookingLink, understood } = await import("../inquiry");
+    const p = parseInquiry(ASK, NOWFRI);
+    const url = new URL(`http://x${bookingLink({ ...p, startMs: 1, ask: { message: ASK, when: p.when } })}`);
+    expect(Object.fromEntries(url.searchParams)).toMatchObject({ v: "suv", s: "interior", a: "pet", zip: "97202", src: "ask", w: "Friday morning", d: "2026-10-02" });
+    expect(url.searchParams.get("m")).toBe(ASK);
+    expect(understood(p).map((c) => c.label)).toEqual(["SUV or wagon", "Interior Reset", "Pet hair removal", "Sellwood (Southeast)", "Friday morning"]);
+  });
+
+  it("offers only real, dry, reachable times, every one of which can actually be booked", async () => {
+    const { answerInquiry } = await import("../inquiry");
+    const { seedState } = await import("../seed");
+    const { forecastFor } = await import("../weather");
+    const s = seedState(NOWFRI);
+    const { inquiry } = answerInquiry(s, "x", ASK, NOWFRI);
+    expect(inquiry.suggested.length).toBeGreaterThan(0);
+    for (const ms of inquiry.suggested) {
+      expect(forecastFor(localDate(ms), s.stormDays).rain).toBeLessThan(70); // dry
+      const booked = () => createJob(s, input({ zip: "97202", service: "interior", addons: ["pet"], vehicle: { kind: "suv", label: "Outback" }, startMs: ms, parking: "driveway" }), NOWFRI);
+      expect(booked, `slot ${new Date(ms).toISOString()}`).not.toThrow(); // drive time already counted
+    }
+  });
+
+  it("says nothing was understood, rather than guessing, when there's no signal", () => {
+    const p = parseInquiry("hi", NOWFRI);
+    expect(p).toMatchObject({ vehicle: null, service: null, zone: null, when: null });
+  });
+});

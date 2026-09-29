@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { CloudRain, Umbrella } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { ZONES, dollars, isCovered, type Parking, type ZoneKey } from "@/lib/business";
 import { neighbourDeal, slotsByDay } from "@/lib/engine";
 import { localMinutes, fmtDate, fmtTime } from "@/lib/time";
@@ -17,6 +18,10 @@ interface Props {
   excludeJobId?: string;
   /** Sealant outdoors: only dry days will do, so wet days show nothing. */
   needsDry?: boolean;
+  /** Start with "dry days only" on (an outdoor car that came in through the natural-language box). */
+  dryDefault?: boolean;
+  /** The day the customer asked for, if it has times: opened first. */
+  preferDate?: string | null;
   /** Show neighbour deals: only when booking new (a move keeps the deal it was booked with). */
   showDeals?: boolean;
   /** Rendered when nothing is open, so the caller can offer the waitlist. */
@@ -24,14 +29,17 @@ interface Props {
 }
 
 /** Real availability only: every time listed here passed the same rules the server enforces. */
-export function SlotPicker({ durationMin, zone, parking, now, value, onChange, excludeJobId, showDeals = false, needsDry = false, whenEmpty }: Props) {
+export function SlotPicker({ durationMin, zone, parking, now, value, onChange, excludeJobId, showDeals = false, needsDry = false, dryDefault = false, preferDate = null, whenEmpty }: Props) {
   const state = useStore();
   const covered = isCovered(parking);
   const minute = Math.floor(now / 60_000);
+  // Dry-days-only is for outdoor cars; a covered car is never moved by rain, so it never needs the filter.
+  const [dryOnly, setDryOnly] = useState(dryDefault && !covered);
+  const dryFilter = dryOnly && !covered;
   const days = useMemo(
-    () => slotsByDay(state, durationMin, zone, now, excludeJobId, { needsDry }),
+    () => slotsByDay(state, durationMin, zone, now, excludeJobId, { needsDry, dryOnly: dryFilter }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [state, durationMin, zone, minute, excludeJobId, needsDry],
+    [state, durationMin, zone, minute, excludeJobId, needsDry, dryFilter],
   );
   const dealOf = (ms: number) => (showDeals ? neighbourDeal(state, { startMs: ms, durationMin, zone }, excludeJobId) : null);
   const withSlots = days.filter((d) => d.slots.length);
@@ -39,22 +47,26 @@ export function SlotPicker({ durationMin, zone, parking, now, value, onChange, e
 
   const dateOfValue = value ? days.find((d) => d.slots.includes(value))?.date : undefined;
   const [picked, setPicked] = useState<string | null>(dateOfValue ?? null);
-  const selected = days.find((d) => d.date === (picked ?? dateOfValue)) ?? bestDry ?? withSlots[0];
+  const wished = preferDate ? withSlots.find((d) => d.date === preferDate) : undefined;
+  const selected = days.find((d) => d.date === (picked ?? dateOfValue)) ?? wished ?? bestDry ?? withSlots[0];
 
   useEffect(() => {
     if (picked && !days.find((d) => d.date === picked)?.slots.length) setPicked(null);
   }, [days, picked]);
 
   if (!withSlots.length) {
-    const wetOnly = needsDry && days.some((d) => d.reason === "wet");
+    const wetOnly = (needsDry || dryFilter) && days.some((d) => d.reason === "wet");
     return (
       <div className="rounded-lg border border-dashed bg-muted/50 p-6 text-center">
         <p className="font-display text-lg font-bold">{wetOnly ? "No dry day with a free slot in the next three weeks" : "Nothing open in the next three weeks"}</p>
         <p className="mx-auto mt-1 max-w-md text-muted-foreground">
           {wetOnly
-            ? "Ceramic spray sealant needs a dry day to cure outdoors. Choose a covered spot, or take the sealant off, and more days open up. Or join the waitlist."
+            ? needsDry
+              ? "Ceramic spray sealant needs a dry day to cure outdoors. Choose a covered spot, or take the sealant off, and more days open up. Or join the waitlist."
+              : "Every open day in the next three weeks is forecast wet, and your car is outdoors. Show the wet days and pick one (we'll offer dry options 48 hours ahead), or join the waitlist."
             : "Dario is one person with one van, and this stretch is full. Join the waitlist and you'll be texted the moment a slot frees up."}
         </p>
+        {dryFilter && !needsDry && <Button type="button" variant="outline" className="mt-4" onClick={() => setDryOnly(false)}>Show wet days too</Button>}
         {whenEmpty}
       </div>
     );
@@ -71,6 +83,12 @@ export function SlotPicker({ durationMin, zone, parking, now, value, onChange, e
           <CloudRain className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
           <span><strong>Ceramic spray sealant needs about four dry hours to cure.</strong> Outdoors, that means we can only offer dry days, so wet days are greyed out. In a garage or carport, any day works.</span>
         </p>
+      )}
+      {!covered && !needsDry && (
+        <label className="flex cursor-pointer items-center gap-3 rounded-md border bg-card px-4 py-3 text-sm has-[:focus-visible]:outline has-[:focus-visible]:outline-[3px] has-[:focus-visible]:outline-sun">
+          <input type="checkbox" checked={dryOnly} onChange={(e) => setDryOnly(e.target.checked)} className="size-4 accent-[hsl(var(--primary))]" />
+          <span><strong>Show dry days only.</strong> <span className="text-muted-foreground">Your car is outdoors, so we hide days forecast for heavy rain.</span></span>
+        </label>
       )}
       <fieldset>
         <legend className="mb-2 text-sm font-semibold">Pick a day</legend>
@@ -102,7 +120,7 @@ export function SlotPicker({ durationMin, zone, parking, now, value, onChange, e
                   <WeatherIcon f={d.forecast} className={cn("size-3.5", active && "!text-primary-foreground")} />
                   {d.forecast.rain}%
                 </span>
-                <span className="text-[0.7rem] font-medium opacity-80">{disabled ? (d.reason === "wet" ? "Needs dry" : "Full") : `${d.slots.length} ${d.slots.length === 1 ? "time" : "times"}`}</span>
+                <span className="text-[0.7rem] font-medium opacity-80">{disabled ? (d.reason === "wet" ? (needsDry ? "Needs dry" : "Rain") : "Full") : `${d.slots.length} ${d.slots.length === 1 ? "time" : "times"}`}</span>
                 {!disabled && d.slots.some((ms) => dealOf(ms)) && (
                   <span className={cn("mt-0.5 rounded-full px-1.5 py-px text-[0.65rem] font-bold", active ? "bg-sun text-sun-ink" : "bg-sun-soft text-sun-ink")}>Deals</span>
                 )}

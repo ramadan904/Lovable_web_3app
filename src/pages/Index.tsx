@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/input";
 import { useNow } from "@/hooks/useNow";
 import { BUSINESS, DEPOSIT_CENTS, MAX_JOBS_PER_DAY, REFILL_MIN, dollars, quote } from "@/lib/business";
 import { slotsByDay } from "@/lib/engine";
-import { bookingLink, parseInquiry } from "@/lib/inquiry";
+import { bookingLink, parseInquiry, understood } from "@/lib/inquiry";
 import type { Inquiry } from "@/lib/model";
 import { actions, useStore } from "@/lib/store";
 import { addDays, fmtDate, fmtDay, fmtTime, localDate } from "@/lib/time";
@@ -84,16 +84,39 @@ export default function Index() {
 
             {answer && parsed && (
               <div className="mt-4 max-w-xl space-y-3 animate-rise-in" role="status" aria-live="polite">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Fernhill replied instantly</p>
-                <p className="whitespace-pre-wrap rounded-2xl rounded-tl-md bg-fern-soft px-4 py-3 text-fern-ink">{answer.reply.replace(/ fernhill\.app\S*/g, "").replace(/: ?$/, ".")}</p>
-                {answer.status !== "needs_owner" && (
-                  <div className="flex flex-wrap gap-2">
-                    {answer.suggested.map((ms) => (
-                      <Button key={ms} asChild variant="sun" size="sm"><Link to={bookingLink({ ...parsed, startMs: ms })}>{fmtDay(ms)} · {fmtTime(ms)}</Link></Button>
-                    ))}
-                    <Button asChild variant="outline" size="sm"><Link to={bookingLink(parsed)}>{answer.suggested.length ? "See all times" : "Continue"}</Link></Button>
-                  </div>
-                )}
+                {(() => {
+                  const chips = understood(parsed);
+                  const ask = { message: answer.text, when: parsed.when };
+                  return (
+                    <>
+                      {chips.length > 0 ? (
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">What we understood</p>
+                          <ul className="mt-1.5 flex flex-wrap gap-1.5" aria-label="What we understood">
+                            {chips.map((c) => <li key={c.key} className="chip border-fern/30 bg-card text-fern-ink">{c.label}</li>)}
+                          </ul>
+                        </div>
+                      ) : (
+                        <p className="rounded-md bg-sun-soft px-3 py-2 text-sm text-sun-ink">
+                          We couldn't spot a vehicle, a place or a day in that. Try something like <strong>“Outback, Sellwood, Friday morning”</strong>, or pick everything yourself.
+                        </p>
+                      )}
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Fernhill replied instantly</p>
+                      <p className="whitespace-pre-wrap rounded-2xl rounded-tl-md bg-fern-soft px-4 py-3 text-fern-ink [overflow-wrap:anywhere]">{answer.reply.replace(/ fernhill\.app\S*/g, "").replace(/: ?$/, ".")}</p>
+                      {answer.status !== "needs_owner" && (
+                        <div className="space-y-2">
+                          {answer.suggested.length > 0 && <p className="text-sm font-semibold">Tap a time to hold it. All dry-forecast, drive time already counted:</p>}
+                          <div className="flex flex-wrap gap-2">
+                            {answer.suggested.map((ms) => (
+                              <Button key={ms} asChild variant="sun" size="sm"><Link to={bookingLink({ ...parsed, startMs: ms, ask })}>{fmtDay(ms)} · {fmtTime(ms)}</Link></Button>
+                            ))}
+                            <Button asChild variant="outline" size="sm"><Link to={bookingLink({ ...parsed, startMs: answer.suggested[0], ask })}>{answer.suggested.length ? "Continue to booking" : "Continue"} <ArrowRight /></Link></Button>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
             )}
           </div>

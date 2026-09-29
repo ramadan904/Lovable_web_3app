@@ -2,7 +2,7 @@
 // browser, in tests, and (unchanged) could run in an edge function.
 import {
   DAY_END_MIN, DAY_START_MIN, GRID_MIN, HOME_ZONE, HORIZON_DAYS, LOAD_MIN, MAX_JOBS_PER_DAY,
-  MIN_NOTICE_H, OPEN_WEEKDAYS, CURE_RAIN_LIMIT, REFILL_MIN, isCovered, quote, rainLimitFor, travelMin,
+  MIN_NOTICE_H, OPEN_WEEKDAYS, CURE_RAIN_LIMIT, RAIN_LIMIT, REFILL_MIN, isCovered, quote, rainLimitFor, travelMin,
   type AddonKey, type Parking, type ZoneKey,
 } from "./business";
 import { ACTIVE, type Job, type State, type WaitlistEntry } from "./model";
@@ -91,7 +91,7 @@ export interface DaySlots {
 
 /** Every day in the booking horizon, with its open slots and forecast. */
 export function slotsByDay(
-  state: State, durationMin: number, zone: ZoneKey, nowMs: number, excludeId?: string, opts: { needsDry?: boolean } = {},
+  state: State, durationMin: number, zone: ZoneKey, nowMs: number, excludeId?: string, opts: { needsDry?: boolean; dryOnly?: boolean } = {},
 ): DaySlots[] {
   const today = localDate(nowMs);
   const days: DaySlots[] = [];
@@ -100,7 +100,7 @@ export function slotsByDay(
     const forecast = forecastFor(date, state.stormDays);
     const open = OPEN_WEEKDAYS.includes(weekdayOf(date));
     // Sealant outdoors needs a dry day to cure, so a wet day offers nothing.
-    const tooWet = opts.needsDry && forecast.rain >= CURE_RAIN_LIMIT;
+    const tooWet = (opts.needsDry && forecast.rain >= CURE_RAIN_LIMIT) || (opts.dryOnly && forecast.rain >= RAIN_LIMIT);
     const slots = open && !tooWet ? findSlots(state, durationMin, zone, date, nowMs, excludeId) : [];
     days.push({ date, open, slots, forecast, reason: !open ? "closed" : tooWet ? "wet" : slots.length ? null : "full" });
   }

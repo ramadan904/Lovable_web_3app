@@ -2,21 +2,30 @@
 // Outback, I'm in Sellwood, Friday morning?") and gets back real times, a real
 // price, and a link that opens the booking already filled in.
 import {
-  ADDONS, NEIGHBORHOODS, SERVICES, ZONES, dollars, hoursLabel, quote, zoneForZip,
+  ADDONS, NEIGHBORHOODS, NEIGHBORHOOD_ZIPS, SERVICES, VEHICLES, ZONES, ZONE_ZIP, dollars, hoursLabel, quote, zoneForZip,
   type AddonKey, type Parking, type ServiceKey, type VehicleKind, type ZoneKey,
 } from "./business";
 import { findSlots, isRainRisk, neighbourDeal } from "./engine";
 import { APP_HOST } from "./messages";
 import type { Inquiry, State } from "./model";
 import { pushEvent, pushMessage } from "./ops";
-import { addDays, atLocal, fmtDay, fmtTime, localDate, localMinutes, weekdayOf } from "./time";
+import { addDays, atLocal, fmtDate, fmtDay, fmtTime, localDate, localMinutes, weekdayOf } from "./time";
 
 export interface ParsedInquiry {
   vehicle: VehicleKind | null;
   service: ServiceKey | null;
   addons: AddonKey[];
   zone: ZoneKey | null;
+  /** The zip the customer gave, or a typical one for the place they named. */
   zip: string | null;
+  /** True when we worked the zip out from a place name, so the form should let them check it. */
+  zipInferred: boolean;
+  /** The place they named, as they'd say it: "Sellwood". */
+  place: string | null;
+  /** They want the earliest possible time ("asap", "urgent", "today"). */
+  urgent: boolean;
+  /** How they said when, in words: "Friday morning", "before Saturday", "as soon as possible". */
+  when: string | null;
   date: string | null;
   before: string | null;
   part: "morning" | "afternoon" | null;
@@ -58,10 +67,22 @@ export function parseInquiry(text: string, nowMs: number): ParsedInquiry {
 
   let zone: ZoneKey | null = null;
   const zipMatch = text.match(/\b(97\d{3})\b/);
-  const zip = zipMatch ? zipMatch[1] : null;
+  let zip: string | null = zipMatch ? zipMatch[1] : null;
+  let zipInferred = false;
+  let place: string | null = null;
   if (zip) zone = zoneForZip(zip);
   if (!zone) {
-    for (const [word, z] of Object.entries(NEIGHBORHOODS)) if (t.includes(word)) { zone = z; break; }
+    // Longest names first, so "south waterfront" wins over "south".
+    for (const [word, z] of Object.entries(NEIGHBORHOODS).sort((a, b) => b[0].length - a[0].length)) {
+      if (new RegExp(`\\b${word.replace(".", "\\.")}\\b`).test(t)) {
+        zone = z;
+        place = word.replace(/\b\w/g, (c) => c.toUpperCase());
+        // A broad area word ("southeast") has no zip of its own; a named neighbourhood does.
+        zip = NEIGHBORHOOD_ZIPS[word] ?? ZONE_ZIP[z];
+        zipInferred = true;
+        break;
+      }
+    }
   }
 
   let date: string | null = null;
@@ -81,23 +102,51 @@ export function parseInquiry(text: string, nowMs: number): ParsedInquiry {
   const part = /\b(morning|am|early)\b/.test(t) ? "morning" : /\b(afternoon|after lunch|after work|evening)\b/.test(t) ? "afternoon" : null;
   const parking: Parking | null = /\b(garage)\b/.test(t) ? "garage" : /\b(carport|covered)\b/.test(t) ? "carport" : /\b(driveway|street|apartment|outside)\b/.test(t) ? "driveway" : null;
 
+  const urgent = /\b(asap|urgent|urgently|right away|as soon as|soonest|earliest|today|tonight|emergency|last minute)\b/.test(t);
+  const dayName = (d: string) => fmtDate(d, "EEEE");
+  const when = date
+    ? `${/\btomorrow\b/.test(t) ? "tomorrow" : /\b(weekend)\b/.test(t) ? "this weekend" : dayName(date)}${part ? ` ${part}` : ""}`
+    : before
+      ? `before ${dayName(before)}${part ? `, ${part}s preferred` : ""}`
+      : urgent
+        ? "as soon as possible"
+        : part
+          ? `${part}s`
+          : null;
   const scope = t.match(/\b(ceramic coating|paint correction|ppf|paint protection film|tint|dent|scratch(es)? repair|wrap|engine bay|boat|rv|motorcycle)\b/);
-  return { vehicle, service, addons, zone, zip, date, before, part, parking, outOfScope: scope ? scope[0] : null };
+  return { vehicle, service, addons, zone, zip, zipInferred, place, urgent, when, date, before, part, parking, outOfScope: scope ? scope[0] : null };
 }
 
 /** The booking link that opens the flow already filled in. */
-export function bookingLink(p: { vehicle?: VehicleKind | null; service?: ServiceKey | null; addons?: AddonKey[]; zip?: string | null; zone?: ZoneKey | null; parking?: Parking | null; startMs?: number; date?: string | null }): string {
+export function bookingLink(p: { vehicle?: VehicleKind | null; service?: ServiceKey | null; addons?: AddonKey[]; zip?: string | null; zone?: ZoneKey | null; parking?: Parking | null; startMs?: number; date?: string | null; ask?: { message: string; when?: string | null } }): string {
   const q = new URLSearchParams();
   if (p.vehicle) q.set("v", p.vehicle);
   if (p.service) q.set("s", p.service);
   if (p.addons?.length) q.set("a", p.addons.join(","));
   if (p.zip) q.set("zip", p.zip);
-  else if (p.zone) q.set("z", p.zone);
+  else if (p.zone) q.set("zip", ZONE_ZIP[p.zone]);
   if (p.parking) q.set("p", p.parking);
   if (p.date) q.set("d", p.date);
   if (p.startMs) q.set("t", String(p.startMs));
+  if (p.ask) {
+    q.set("src", "ask");
+    q.set("m", p.ask.message.slice(0, 160));
+    if (p.ask.when) q.set("w", p.ask.when);
+  }
   const s = q.toString();
   return `/book${s ? `?${s}` : ""}`;
+}
+
+/** The plain-language "here is what I understood" list, so the customer can see it was heard. */
+export function understood(p: ParsedInquiry): { key: string; label: string }[] {
+  const out: { key: string; label: string }[] = [];
+  if (p.vehicle) out.push({ key: "vehicle", label: VEHICLES[p.vehicle].name });
+  if (p.service) out.push({ key: "service", label: SERVICES[p.service].name });
+  for (const a of p.addons) out.push({ key: `addon-${a}`, label: ADDONS[a].name });
+  if (p.zone) out.push({ key: "place", label: p.place ? `${p.place} (${ZONES[p.zone].name})` : ZONES[p.zone].name });
+  if (p.when) out.push({ key: "when", label: p.when.charAt(0).toUpperCase() + p.when.slice(1) });
+  if (p.urgent) out.push({ key: "urgent", label: "Urgent: earliest dry slots" });
+  return out;
 }
 
 export interface Suggestion {
@@ -125,7 +174,7 @@ export function suggestDetailed(state: State, p: ParsedInquiry, nowMs: number, d
     });
     // Prefer the slot that earns a neighbour deal: cheaper for them, less driving for Dario.
     const withDeal = slots.find((ms) => neighbourDeal(state, { startMs: ms, durationMin, zone }));
-    if (slots.length) picks.push(withDeal ?? slots[0]);
+    if (slots.length) picks.push(p.urgent ? slots[0] : withDeal ?? slots[0]);
   }
   // Nothing that matches the asked-for day or deadline: widen to the next open days.
   if (!picks.length && (p.date || p.before || p.part)) {
@@ -146,7 +195,7 @@ export function answerInquiry(state: State, from: string, text: string, nowMs: n
   if (p.outOfScope) {
     status = "needs_owner";
     note = `Asked about ${p.outOfScope}, which isn't on the menu.`;
-    reply = `Thanks for asking. ${p.outOfScope[0].toUpperCase()}${p.outOfScope.slice(1)} isn't something Bertha's set up for, so I've passed your message to Dario, who'll reply himself today. If you'd like a wash or interior in the meantime, this shows real times: ${APP_HOST}${bookingLink({ vehicle: p.vehicle, zip: p.zip })}`;
+    reply = `Thanks for asking. ${p.outOfScope[0].toUpperCase()}${p.outOfScope.slice(1)} isn't something Bertha's set up for, so I've passed your message to Dario, who'll reply himself today. If you'd like a wash or interior in the meantime, this shows real times: ${APP_HOST}${bookingLink({ vehicle: p.vehicle, zip: p.zip, ask: { message: text, when: p.when } })}`;
   } else {
     const vehicle = p.vehicle ?? "suv";
     const service = p.service ?? "full";
@@ -165,10 +214,10 @@ export function answerInquiry(state: State, from: string, text: string, nowMs: n
         .join(" · ");
       const ask = p.date ? "that day" : p.before ? `before ${fmtDay(atLocal(p.before, 12 * 60))}` : "then";
       reply = suggested.length
-        ? `Yes, we come to you in ${ZONES[zone].name}. ${what}: ${dollars(q.totalCents)}, about ${hoursLabel(q.durationMin)}. ${found.widened ? `Nothing dry is free ${ask}, so here are the next openings: ` : "Open times: "}${times}. Tap one to hold it (a ${dollars(2500)} deposit comes off the total): ${APP_HOST}${bookingLink({ vehicle: p.vehicle, service: p.service ?? service, addons: p.addons, zip: p.zip, zone, parking: p.parking, startMs: suggested[0] })}`
-        : `Yes, we come to you in ${ZONES[zone].name}. ${what}: ${dollars(q.totalCents)}, about ${hoursLabel(q.durationMin)}. Nothing dry is open in the next two weeks, so join the waitlist and you'll be texted when a slot frees up: ${APP_HOST}${bookingLink({ vehicle: p.vehicle, service, addons: p.addons, zip: p.zip, zone })}`;
+        ? `Yes, we come to you in ${ZONES[zone].name}${p.place ? ` (${p.place})` : ""}. ${what}: ${dollars(q.totalCents)}, about ${hoursLabel(q.durationMin)}. ${found.widened ? `Nothing dry is free ${ask}, so here are the next openings: ` : p.urgent ? "Earliest dry times: " : "Open times, dry-forecast with the drive already counted: "}${times}. Tap one to hold it (a ${dollars(2500)} deposit comes off the total): ${APP_HOST}${bookingLink({ vehicle: p.vehicle, service: p.service ?? service, addons: p.addons, zip: p.zip, zone, parking: p.parking, startMs: suggested[0], ask: { message: text, when: p.when } })}`
+        : `Yes, we come to you in ${ZONES[zone].name}${p.place ? ` (${p.place})` : ""}. ${what}: ${dollars(q.totalCents)}, about ${hoursLabel(q.durationMin)}. Nothing dry is open in the next two weeks, so join the waitlist and you'll be texted when a slot frees up: ${APP_HOST}${bookingLink({ vehicle: p.vehicle, service, addons: p.addons, zip: p.zip, zone, ask: { message: text, when: p.when } })}`;
     } else {
-      reply = `Yes, we come to you. ${what}: from ${dollars(q.totalCents)}, about ${hoursLabel(q.durationMin)}. Tell us your zip and you'll see real open times, with rain flagged: ${APP_HOST}${bookingLink({ vehicle: p.vehicle, service: p.service, addons: p.addons })}`;
+      reply = `Yes, we come to you. ${what}: from ${dollars(q.totalCents)}, about ${hoursLabel(q.durationMin)}. Tell us your zip and you'll see real open times, with rain flagged: ${APP_HOST}${bookingLink({ vehicle: p.vehicle, service: p.service, addons: p.addons, ask: { message: text, when: p.when } })}`;
     }
   }
   const inquiry: Inquiry = { id, at: nowMs, from, text, reply, suggested, status, jobId: null, note };

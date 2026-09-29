@@ -266,10 +266,11 @@ test.describe("Booking review and the rain promise", () => {
     await toReview(page);
     const review = page.getByRole("region", { name: "Review your booking" });
     await expect(review).toBeVisible();
-    for (const label of ["Service", "Vehicle", "Where", "Parking", "Time window", "Price"]) await expect(review.getByText(label, { exact: true })).toBeVisible();
+    for (const label of ["Service", "Vehicle", "Where", "Parking", "Time window"]) await expect(review.getByText(label, { exact: true })).toBeVisible();
+    await expect(review.getByRole("group", { name: "Price breakdown" })).toBeVisible();
     await expect(review.getByText(/covered, not weather-sensitive/)).toBeVisible();
     await expect(review.getByText(/to about \d{1,2}:\d{2} [AP]M/)).toBeVisible();
-    await expect(page.getByText("$25 holds the slot. Fully refundable if we have to move you for rain.")).toBeVisible();
+    await expect(page.getByText("$25 deposit holds the slot. Fully refundable if we have to move you for rain.")).toBeVisible();
     await expect(page.getByRole("region", { name: "Weather status" })).toContainText("Not weather-sensitive");
   });
 
@@ -304,7 +305,7 @@ test.describe("Confirmation and the customer portal", () => {
     const next = page.getByRole("region", { name: "What happens next" });
     await expect(next).toContainText("Prep note");
     await expect(next).toContainText(/48 hours|Prep note (Sun|Mon|Tue|Wed|Thu|Fri|Sat)/);
-    await expect(next).toContainText("One-tap confirm");
+    await expect(next).toContainText("Confirmation reminder");
     await expect(next).toContainText("On-the-way text");
     await expect(next).toContainText("Rain watch");
     await expect(page.getByRole("region", { name: "Weather status" })).toContainText("Not weather-sensitive");
@@ -510,5 +511,85 @@ test.describe("Ceramic sealant needs a dry day to cure", () => {
     await page.getByRole("button", { name: /Continue/ }).click();
     await expect(page.getByText(/needs about four dry hours to cure/)).toHaveCount(0);
     await expect(page.locator("fieldset button[aria-pressed][disabled]").filter({ hasText: /Needs dry/ })).toHaveCount(0);
+  });
+});
+
+
+test.describe("Natural language to a confirmed booking", () => {
+  const ASK = "My dog wrecked my Outback. I'm in Sellwood. Friday morning?";
+
+  test("your example becomes a filled-in booking with real dry times, carried all the way to the confirmation", async ({ page }) => {
+    await page.goto("/");
+    await page.getByLabel(/Ask the way you'd text/).fill(ASK);
+    await page.getByRole("button", { name: "Get real times" }).click();
+
+    // What we understood, in plain words.
+    const understood = page.getByRole("list", { name: "What we understood" }).first();
+    for (const chip of ["SUV or wagon", "Interior Reset", "Pet hair removal", "Sellwood (Southeast)", "Friday morning"]) await expect(understood).toContainText(chip);
+    await expect(page.getByText(/dry-forecast, drive time already counted/)).toBeVisible();
+    await page.getByRole("link", { name: /Continue to booking/ }).click();
+
+    // The form is already filled in: car, service, add-on, and a zip for Sellwood.
+    await expect(page.getByRole("region", { name: "What we read from your message" })).toContainText(ASK);
+    await expect(page.getByRole("heading", { name: "Where do we find you?" })).toBeVisible();
+    await expect(page.getByLabel("Zip code")).toHaveValue("97202");
+    await expect(page.getByText(/We used .*97202.* for Sellwood/)).toBeVisible();
+    await page.getByLabel("Street address").fill("1 Umatilla St");
+    await page.getByRole("radio", { name: /^Driveway/ }).check({ force: true });
+    await page.getByRole("button", { name: /Continue/ }).click();
+
+    // Only dry days are shown, with the slot they were offered already chosen or one tap away.
+    await expect(page.getByRole("checkbox", { name: /Show dry days only/ })).toBeChecked();
+    const rainy = page.locator("fieldset button[aria-pressed]:not([disabled])").filter({ hasText: /Rain likely/ });
+    await expect(rainy).toHaveCount(0);
+    // A neighbour-deal time also carries its discount ("2:00 PM −$10"), so match on the start of the label.
+    const time = page.locator("fieldset button[aria-pressed]").filter({ hasText: /^\d{1,2}:\d{2} [AP]M/ }).first();
+    await time.click();
+    await page.getByRole("button", { name: /Continue/ }).click();
+
+    // Review & pay: a clear breakdown, the deposit broken out, the exact promise.
+    await expect(page.getByRole("heading", { name: "Review and pay the deposit" })).toBeVisible();
+    const review = page.getByRole("region", { name: "Review your booking" });
+    await expect(review).toContainText("Interior Reset");
+    await expect(review).toContainText(/Pet hair removal/);
+    await expect(review).toContainText(/Driveway · outdoors, weather-sensitive/);
+    await expect(review).toContainText(/to about \d{1,2}:\d{2} [AP]M/);
+    const price = review.getByRole("group", { name: "Price breakdown" });
+    await expect(price.getByText("Total", { exact: true })).toBeVisible();
+    await expect(price).toContainText("Due now");
+    await expect(price).toContainText("$25");
+    await expect(price).toContainText("Due on the day");
+    await expect(page.getByText("$25 deposit holds the slot. Fully refundable if we have to move you for rain.")).toBeVisible();
+    await page.getByLabel("Your name").fill("Nat Lang");
+    await page.getByLabel("Mobile number").fill("(503) 555-0100");
+    await page.getByLabel("Email").fill("nat@example.com");
+    await page.getByRole("button", { name: /Book it/ }).click();
+
+    // Confirmation: reference, what happens next, one-tap actions, and a link to come back to.
+    await expectBooked(page);
+    await expect(page.getByText("Booking code", { exact: true })).toBeVisible();
+    const banner = page.getByRole("region", { name: "Your booking page" });
+    await expect(banner).toContainText(/fernhill\.app\/b\/FH-[A-Z0-9]{4}/);
+    await expect(banner.getByRole("button", { name: "Copy link" })).toBeVisible();
+    await expect(page.getByRole("link", { name: /Add to calendar|Google Calendar/ }).first()).toHaveAttribute("href", /calendar\.google\.com\/calendar\/render/);
+    await expect(page.getByRole("button", { name: "Reschedule", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Cancel", exact: true }).first()).toBeVisible();
+    await expect(page.getByRole("region", { name: "What happens next" })).toContainText("Confirmation reminder");
+  });
+
+  test("a message we can't read says so instead of guessing, and offers a way forward", async ({ page }) => {
+    await page.goto("/");
+    await page.getByLabel(/Ask the way you'd text/).fill("hi");
+    await page.getByRole("button", { name: "Get real times" }).click();
+    await expect(page.getByText(/couldn't spot a vehicle, a place or a day/)).toBeVisible();
+    await expect(page.getByRole("link", { name: /Continue/ })).toBeVisible();
+  });
+
+  test("urgent requests get the earliest dry times", async ({ page }) => {
+    await page.goto("/");
+    await page.getByLabel(/Ask the way you'd text/).fill("need my truck washed ASAP, muddy, Beaverton");
+    await page.getByRole("button", { name: "Get real times" }).click();
+    await expect(page.getByRole("list", { name: "What we understood" }).first()).toContainText("Urgent: earliest dry slots");
+    await expect(page.getByText(/Earliest dry times/)).toBeVisible();
   });
 });

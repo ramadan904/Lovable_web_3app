@@ -26,5 +26,18 @@ export function downloadIcs(job: Job) {
   URL.revokeObjectURL(url);
 }
 
+/** A "add to Google Calendar" link. It's a plain link, so it works everywhere, including the hosted preview. */
+export function googleCalendarUrl(job: Job): string {
+  const end = job.startMs + job.durationMin * 60_000;
+  const q = new URLSearchParams({
+    action: "TEMPLATE",
+    text: `${SERVICES[job.service].name} · ${BUSINESS.name}`,
+    dates: `${stamp(job.startMs)}/${stamp(end)}`,
+    location: job.address,
+    details: `Booking ${job.code}. ${BUSINESS.owner} comes to you. Manage: fernhill.app/b/${job.code}`,
+  });
+  return `https://calendar.google.com/calendar/render?${q.toString()}`;
+}
+
 /** The hosted single-file build runs in a frame that blocks downloads, so it hides the button. */
 export const CAN_DOWNLOAD = import.meta.env.VITE_ROUTER !== "memory";

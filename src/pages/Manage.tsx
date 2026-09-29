@@ -12,7 +12,8 @@ import { Label } from "@/components/ui/label";
 import { useNow } from "@/hooks/useNow";
 import { timelineFor } from "@/lib/automations";
 import { ADDONS, BUSINESS, FREE_CHANGE_H, PARKING, PLAN_DISCOUNT, RAIN_CHECK_H, SERVICES, ZONES, dollars, hoursLabel, isCovered, needsDryDay } from "@/lib/business";
-import { CAN_DOWNLOAD, downloadIcs } from "@/lib/ics";
+import { CAN_DOWNLOAD, downloadIcs, googleCalendarUrl } from "@/lib/ics";
+import { APP_HOST } from "@/lib/messages";
 import { dryOptions } from "@/lib/engine";
 import { ACTIVE, BookingError } from "@/lib/model";
 import { getJob } from "@/lib/ops";
@@ -77,8 +78,8 @@ export default function Manage() {
       ? { title: "Prep note", text: `${fmtStamp(at("prep")!.at)}: what to clear out, and any gate code changes`, done: at("prep")!.state === "sent" }
       : { title: "Prep note", text: "is in your confirmation (you booked inside 48 hours): clear out personal items and trash", done: true },
     at("reminder")
-      ? { title: "One-tap confirm", text: `${fmtStamp(at("reminder")!.at)}: tap Confirm and you're set`, done: at("reminder")!.state === "sent" }
-      : { title: "One-tap confirm", text: "isn't needed: you booked inside 24 hours, so you're already confirmed", done: true },
+      ? { title: "Confirmation reminder", text: `${fmtStamp(at("reminder")!.at)}: one tap on Confirm and you're set`, done: at("reminder")!.state === "sent" }
+      : { title: "Confirmation reminder", text: "isn't needed: you booked inside 24 hours, so you're already confirmed", done: true },
     { title: "On-the-way text", text: `${fmtStamp(job.startMs - 30 * MIN)}: with a live map of Bertha`, done: at("omw")?.state === "sent" },
     ...(job.plan ? [{ title: "Care plan", text: `once this visit is done, your next one (every ${job.plan.everyWeeks} weeks) is booked automatically, 10% off, no deposit`, done: false }] : []),
     { title: "Rain watch", text: covered ? "Your car is covered, so weather never moves you." : `${RAIN_CHECK_H} hours before, if heavy rain is forecast, you're offered dry times and moved free.`, done: false },
@@ -92,6 +93,13 @@ export default function Manage() {
     navigator.clipboard?.writeText(job.code).then(
       () => toast.success("Booking code copied"),
       () => toast(`Your booking code is ${job.code}`),
+    );
+  };
+  const copyLink = () => {
+    const link = `${APP_HOST}/b/${job.code}`;
+    navigator.clipboard?.writeText(link).then(
+      () => toast.success("Link copied"),
+      () => toast(`Your booking page is ${link}`),
     );
   };
   const guard = (fn: () => void, ok: string) => {
@@ -122,10 +130,26 @@ export default function Manage() {
             </div>
 
             <div className="flex flex-wrap gap-2">
-              {CAN_DOWNLOAD && <Button variant="sun" onClick={() => downloadIcs(job)}><CalendarPlus /> Add to calendar</Button>}
+              {CAN_DOWNLOAD ? (
+                <>
+                  <Button variant="sun" onClick={() => downloadIcs(job)}><CalendarPlus /> Add to calendar</Button>
+                  <Button asChild variant="outline" className="border-primary-foreground/40 bg-transparent text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground"><a href={googleCalendarUrl(job)} target="_blank" rel="noreferrer">Google Calendar</a></Button>
+                </>
+              ) : (
+                <Button asChild variant="sun"><a href={googleCalendarUrl(job)} target="_blank" rel="noreferrer"><CalendarPlus /> Add to calendar</a></Button>
+              )}
               <Button variant="outline" className="border-primary-foreground/40 bg-transparent text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground" onClick={() => openChange("move")}>Reschedule</Button>
               <Button variant="outline" className="border-primary-foreground/40 bg-transparent text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground" onClick={() => openChange("cancel")}>Cancel</Button>
             </div>
+
+            <section aria-label="Your booking page" className="flex flex-wrap items-center justify-between gap-3 rounded-md bg-primary-foreground/10 px-4 py-3">
+              <div className="min-w-0">
+                <p className="text-sm font-bold">Your booking page</p>
+                <p className="text-sm text-primary-foreground/80">Come back any time to confirm, reschedule or cancel. We've texted you this link too.</p>
+                <p className="mt-1 break-all font-mono text-sm font-semibold">{APP_HOST}/b/{job.code}</p>
+              </div>
+              <Button variant="outline" size="sm" className="border-primary-foreground/40 bg-transparent text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground" onClick={copyLink}><Copy /> Copy link</Button>
+            </section>
 
             <section aria-label="What happens next" className="rounded-md bg-primary-foreground/10 p-4">
               <h2 className="mb-3 font-display text-lg font-bold">What happens next</h2>
