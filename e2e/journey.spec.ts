@@ -2,6 +2,8 @@ import { expect, test, type Page } from "@playwright/test";
 import { expectBooked, trackErrors } from "./helpers";
 
 /** Book a Full Refresh for an SUV in a garage (so weather never interferes). */
+/** The browser storage key of the demo state: bump it in src/lib/store.ts and here together. */
+const STORE_KEY = "fernhill:demo:v4";
 const TIME = /^\d{1,2}:\d{2} [AP]M$/;
 /** Days that have open times, in the picker's order. */
 const dayButtons = (page: Page) => page.locator("fieldset button[aria-pressed]:not([disabled])").filter({ hasText: /\d times?/ });
@@ -393,17 +395,17 @@ test("cancelling after rain has changed the booking is a full refund, even insid
   await expectBooked(page);
   const url = page.url();
   // A storm on her day, then time passes to well inside 24 hours (she never picks a dry option).
-  const start = await page.evaluate(() => {
-    const s = JSON.parse(localStorage.getItem("fernhill:demo:v3")!);
+  const start = await page.evaluate((key) => {
+    const s = JSON.parse(localStorage.getItem(key)!);
     const j = s.jobs.find((x: { customer: { name: string } }) => x.customer.name === "Refund Rae");
     return j.startMs as number;
-  });
-  await page.evaluate((ms) => {
-    const s = JSON.parse(localStorage.getItem("fernhill:demo:v3")!);
-    const d = new Date(ms).toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
+  }, STORE_KEY);
+  await page.evaluate(([ms, key]) => {
+    const s = JSON.parse(localStorage.getItem(key as string)!);
+    const d = new Date(ms as number).toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
     s.stormDays = [d];
-    localStorage.setItem("fernhill:demo:v3", JSON.stringify(s));
-  }, start);
+    localStorage.setItem(key as string, JSON.stringify(s));
+  }, [start, STORE_KEY] as const);
   await page.goto(url.split("?")[0]);
   await page.evaluate(() => window.location.reload());
   for (let i = 0; i < 24; i++) {
@@ -451,10 +453,10 @@ test.describe("Running behind", () => {
     await page.goto("/owner");
     await demo(page, /Dario runs 20 min behind/);
     await expect(page.getByText(/told: running 20 min behind/)).toBeVisible();
-    const code = await page.evaluate(() => {
-      const s = JSON.parse(localStorage.getItem("fernhill:demo:v4")!);
+    const code = await page.evaluate((key) => {
+      const s = JSON.parse(localStorage.getItem(key)!);
       return s.jobs.find((j: { delayMin: number; status: string }) => j.delayMin > 0 && ["booked", "confirmed"].includes(j.status)).code as string;
-    });
+    }, STORE_KEY);
     await page.goto(`/b/${code}`);
     const notice = page.getByRole("status", { name: "Running late" });
     await expect(notice).toContainText(/running about 20 min behind today/);
