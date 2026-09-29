@@ -43,6 +43,13 @@ Each one is a rule the booking engine enforces (`src/lib/engine.ts`), not copy o
 - **A morning day sheet:** the route in order, drive minutes, refill stop, addresses, gate codes and notes, and who has not confirmed.
 - **Neighbour deals (route-density pricing).** If a slot sits directly before or after a job in the same zone, Dario makes one trip instead of two, and the customer gets the saving as a discount: every minute he doesn't drive is 50¢ off (a Southeast slot next to another Southeast job saves 20 min, so $10). Discounted times are marked on the calendar, come off the total, appear in the inquiry replies ("$10 off, Dario's already nearby"), and are locked in at booking (a later move or rain reschedule never takes it away). Dario's ledger counts the driving minutes saved. The pricing rule is one tested function, `neighbourDeal` in `src/lib/engine.ts`.
 - **"Where's Bertha?" live van tracker.** A schematic map of Portland with the day's route on it and the van driving along it, computed from the very same route the scheduler validates, so it can't disagree with the calendar. Customers see it on their booking page ("2 jobs before yours", "On the way, about 12 min from you", "Detailing your car: 60% done"), and the "on the way" text links to it. Other customers' stops are drawn as anonymous pins, so nobody sees anyone else's name. Dario gets the same map on his day sheet, with a scrubber and a **Play the day** button that replays the whole day (rain included). It replaces the "where are you?" text.
+- **Rain, made visible.** Every booking says whether the address is weather-sensitive (garage or carport: never moved; driveway or street: watched). At booking, on the confirmation and in the customer portal, an outdoor car on a rainy day is shown the next dry times and can switch in one tap. Forty-eight hours out, a forecast storm triggers an automatic offer, and the first dry option is taken if the customer doesn't reply. The promise on the deposit is real: **$25 holds the slot, and it is fully refundable if rain has changed the booking**, even inside 24 hours (`cancelJob` in `src/lib/ops.ts`).
+- **Booking review and confirmation.** Before the deposit, a review card shows service, vehicle, address, parking type, exact time window, price and duration. After booking: the booking code, one-tap Add to calendar / Reschedule / Cancel, and a "What happens next" list (prep note, one-tap confirm, on-the-way text, rain watch).
+- **Customer portal** at `/b/<code>` (the link in every text): one-tap confirm, one-tap nearest alternatives, reschedule, cancel, edit the gate code, live van map.
+- **Owner's daily tool** (`/owner`): a **Needs you** queue where every item comes with a drafted reply (edit first, or send in one tap); exact headline numbers (messages you didn't write, hours saved, no-shows recovered in slots and dollars, revenue earned and booked ahead); **Weather moves this week**; a **Waitlist** card that offers a freed slot to the next person; and **Today's run**, the day in one strip with every drive time already calculated.
+- **Running behind, in one tap.** Bertha is late? On "Today's run" Dario taps +10 / +20 / +30 min. Every customer still to come today gets a text with a recalculated arrival, their live map and ETA shift, and the on-the-way text moves with it. The booked slot itself never changes. Reports stack, are capped at two hours (past that it's kinder to call), and a customer's own move clears the delay.
+- **Care plans for regulars.** At booking, "Keep it clean": repeat every 4, 6 or 8 weeks, 10% off every visit after the first, no deposit after the first. When a visit is finished the next one is booked automatically, on the same weekday and time if free, otherwise the nearest open slot within three days (`scheduleNextVisit` in `src/lib/ops.ts`). Customers can skip a visit (the plan carries on) or end the plan; Dario's ledger counts regulars and repeat visits booked for him.
+- **Sealant cure rule.** Ceramic spray sealant needs about four dry hours to cure, so outdoors it is only offered on days under 40% rain (a normal wash moves at 70%). Wet days are greyed out with the reason; in a garage or carport any day works, and rain offers for these jobs use the stricter limit.
 - **"Handled for you":** a weekly ledger of messages sent, bookings taken, reschedules and gaps refilled, with a transparent estimate of hours saved. Nothing is hidden: the "Needs you" list only shows what truly needs a human (for example a request for ceramic coating, which isn't on the menu).
 
 ## Run it
@@ -71,6 +78,15 @@ There is no backend to configure. The app runs on a seeded in-browser store, gen
 4. Open **Demo controls**, then **Storm hits...**. Open the **Messages sent** tab, filter to **Rain**, and open a customer's booking link to choose a dry day.
 5. Press **+6 hours** a few times, or **Next job morning**, and watch unconfirmed bookings get nudged, released and offered to the waitlist.
 
+## Deploy
+
+The app is static, so any static host works.
+
+- **GitHub Pages (included).** `.github/workflows/pages.yml` builds with `npm run build:pages` (relative paths, hash routing, so deep links and reloads work under `https://<owner>.github.io/<repo>/`) and publishes on every push to `main` or the working branch. One-time setup: **Settings → Pages → Build and deployment → Source: GitHub Actions**. Pages on a private repository needs a paid GitHub plan, and the `github-pages` environment may only allow deployments from the default branch (Settings → Environments).
+- **Vercel (config included).** `vercel.json` sets the Vite build and a rewrite so every route serves `index.html` (real paths like `/book` and `/b/FH-XXXX` work on reload). At vercel.com/new, import the GitHub repo and deploy the branch you want live; no environment variables are needed. Note that Vercel's production branch defaults to the repository's default branch.
+- **Anywhere else.** `npm run build` (normal paths, needs a "serve index.html for every route" rule) or `npm run build:pages` (works from any folder).
+- **Single-file page.** `npm run build:artifact` bundles everything into one HTML file, used for the hosted preview.
+
 ## Architecture
 
 ```
@@ -97,6 +113,22 @@ Being honest about the boundary of the demo:
 - **Data lives in the visitor's browser** (`localStorage`). Production would move `State` into Postgres; the rules would move with it unchanged, and bookings would gain an exclusion constraint on time ranges.
 - **Seeded customers reply on their own** ("C" to confirm, picking a rain option, claiming a waitlist offer) so that both sides of each flow are visible in a single demo.
 
+## Colour
+
+Every colour is tied to something real in Portland, and the palette reacts to the weather.
+
+| Token | Where it comes from |
+|---|---|
+| Fern / primary | Douglas-fir needles on a wet morning |
+| Paper | Unbleached shop-invoice paper |
+| Sun amber | A rare dry-day sun (and, in rain, sodium streetlights on a wet road) |
+| Rain | The Willamette under cloud |
+| Pearl (`iris-1..4`: teal, azure, violet, Rose City rose) | Pearl paint and water beading on a freshly sealed panel |
+
+- **Pearl sheen, used sparingly:** one gradient headline phrase, a thin bar under the header, the van's stripe, gradient hairlines on the ask box, the booking code and the owner's key tile, and soft glows behind the hero.
+- **Weather-reactive palette.** When it's raining in Portland (today's forecast is wet, or the demo's storm is within two days), `<html data-weather="rain">` switches the CSS variables in `src/index.css`: the warm paper cools to overcast grey-blue, the fir goes to wet-asphalt petrol, rain streaks fall behind the hero, and the header shows the day's forecast. The amber stays. Pressing **Storm** in the demo controls flips the whole app, live.
+- **Accessible by test.** `src/lib/__tests__/palette.test.ts` reads the real tokens and asserts WCAG contrast for every text and background pairing, and for the pearl text, in both moods. Playwright also runs axe audits in rain mode.
+
 ## Tests
 
 ```bash
@@ -106,6 +138,10 @@ npm run lint    # tsc --noEmit
 ```
 
 Unit tests cover, among others: a Westside job cannot start before 8:50, the third job needs the refill stop, a fourth job is refused, a slot taken mid-booking fails cleanly, moves are refused inside 24 hours, a cancelled slot is offered to a waitlisted customer and passed on after two hours, a storm moves outdoor jobs and never touches covered ones, and the seed is valid whichever day the app is opened.
+
+## A bug worth remembering
+
+CI caught a crash that only newer Chrome triggers: a route-change effect written as `useEffect(() => window.scrollTo(...))` returned whatever `scrollTo` returns. Newer browsers return a Promise, React tried to call it as a cleanup function on the next navigation, and the whole page went blank (right after every booking). Effects now use braces, and `e2e/journey.spec.ts` simulates the Promise-returning `scrollTo` so it can't come back.
 
 ## Accessibility
 

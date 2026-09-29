@@ -3,7 +3,7 @@
 import { CONFIRM_NUDGE_H, RAIN_CHECK_H, RELEASE_H } from "./business";
 import { isRainRisk } from "./engine";
 import { ACTIVE, type Job, type State } from "./model";
-import { chooseRainOption, claimOffer, confirmJob, makeRainOffer, offerBackfill, pushEvent, releaseJob, sendForJob } from "./ops";
+import { chooseRainOption, claimOffer, confirmJob, makeRainOffer, offerBackfill, pushEvent, releaseJob, scheduleNextVisit, sendForJob } from "./ops";
 import { HOUR, MIN, fmtDay, fmtTime } from "./time";
 
 export type StepKind = "prep" | "reminder" | "simConfirm" | "nudge" | "release" | "omw" | "complete" | "aftercare";
@@ -16,7 +16,8 @@ export interface Step {
 
 /** The scheduled steps for a job. They are derived from its start, so moving the job moves them. */
 export function plan(job: Job): Step[] {
-  const end = job.startMs + job.durationMin * MIN;
+  const arrival = job.startMs + (job.delayMin ?? 0) * MIN;
+  const end = arrival + job.durationMin * MIN;
   const steps: Step[] = [
     { kind: "prep", at: job.startMs - 48 * HOUR, label: "Prep note" },
     { kind: "reminder", at: job.startMs - 24 * HOUR, label: "Reminder with one-tap confirm" },
@@ -25,7 +26,7 @@ export function plan(job: Job): Step[] {
   steps.push(
     { kind: "nudge", at: job.startMs - CONFIRM_NUDGE_H * HOUR, label: "Second nudge if unconfirmed" },
     { kind: "release", at: job.startMs - RELEASE_H * HOUR, label: "Release the slot if still unconfirmed" },
-    { kind: "omw", at: job.startMs - 30 * MIN, label: "On-my-way text" },
+    { kind: "omw", at: arrival - 30 * MIN, label: "On-my-way text" },
     { kind: "complete", at: end, label: "Job marked done" },
     { kind: "aftercare", at: end + 2 * HOUR, label: "Care tips and rebook link" },
   );
@@ -101,6 +102,7 @@ export function tick(state: State, nowMs: number): State {
         j.closedAt = step.at;
         j.depositState = "applied";
         pushEvent(s, step.at, "completed", j.id, `${j.customer.name}: job done`);
+        scheduleNextVisit(s, j, step.at);
         break;
       case "aftercare": sendForJob(s, j, "aftercare", step.at); break;
     }
@@ -110,7 +112,7 @@ export function tick(state: State, nowMs: number): State {
   const rainIds = s.jobs
     .filter((job) => {
       const until = job.startMs - nowMs;
-      return ACTIVE.includes(job.status) && !job.rainOffer && !job.ownerFlag && until > 0 && until <= RAIN_CHECK_H * HOUR && isRainRisk(s, job.startMs, job.parking);
+      return ACTIVE.includes(job.status) && !job.rainOffer && !job.ownerFlag && until > 0 && until <= RAIN_CHECK_H * HOUR && isRainRisk(s, job.startMs, job.parking, job.addons);
     })
     .map((j) => j.id);
   const expiredIds = s.waitlist.filter((w) => w.status === "offered" && w.offer && w.offer.expiresAt <= nowMs).map((w) => w.id);

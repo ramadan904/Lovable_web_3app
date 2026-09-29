@@ -3,14 +3,14 @@
 import { useSyncExternalStore } from "react";
 import { advance, tick } from "./automations";
 import { answerInquiry } from "./inquiry";
-import { cancelJob, chooseRainOption, claimOffer, confirmJob, createJob, joinWaitlist, moveJob, type BookingInput, type WaitlistInput } from "./ops";
+import { cancelJob, chooseRainOption, claimOffer, confirmJob, createJob, joinWaitlist, moveJob, reportDelay, sendOwnerReply, skipVisit, endPlan, type BookingInput, type WaitlistInput } from "./ops";
 import { seedState } from "./seed";
 import type { Job, State } from "./model";
 import { HOUR, addDays, atLocal, localDate, weekdayOf } from "./time";
 import { OPEN_WEEKDAYS, isCovered } from "./business";
 import { activeJobs } from "./engine";
 
-const KEY = "fernhill:demo:v2";
+const KEY = "fernhill:demo:v4";
 const MAX_AGE_MS = 6 * 24 * HOUR;
 
 let memory: string | null = null;
@@ -72,6 +72,23 @@ export const actions = {
     if (job) job.access = { gateCode, notes };
     set(next);
   },
+  /** "Running behind": tells everyone still to come today the new arrival. Returns who was told. */
+  runningBehind(minutes: number): string[] {
+    const { state: next, notified } = reportDelay(state, minutes, nowMs());
+    set(next);
+    return notified;
+  },
+  /** Demo: get to a working morning if the day is over, then run behind. */
+  demoRunningBehind(minutes: number): { notified: string[]; jumped: boolean } {
+    let jumped = false;
+    const today = localDate(nowMs());
+    const left = () => activeJobs(state).some((j) => localDate(j.startMs) === today && j.startMs + j.delayMin * 60_000 > nowMs());
+    if (!left()) { actions.jumpToNextJobMorning(); jumped = true; }
+    return { notified: actions.runningBehind(minutes), jumped };
+  },
+  skipPlanVisit(id: string) { set(skipVisit(state, id, nowMs())); },
+  endCarePlan(id: string) { set(endPlan(state, id)); },
+  sendReply(target: { jobId: string } | { inquiryId: string }, body: string) { set(sendOwnerReply(state, target, body, nowMs())); },
   dismissFlag(id: string) {
     const next = structuredClone(state);
     const job = next.jobs.find((j) => j.id === id);
@@ -127,6 +144,22 @@ export const actions = {
     next.stormDays = [...new Set([...next.stormDays, date])];
     set({ ...advance(next, from, target), clockOffsetMs: next.clockOffsetMs + (target - from) });
     return { date, jumpedHours: Math.round((target - from) / HOUR) };
+  },
+  /** A customer cancels their next booking, so the waitlist offer flow can be watched. */
+  demoCancel(): string | null {
+    const from = nowMs();
+    const target = activeJobs(state).filter((j) => j.startMs > from + 25 * HOUR).sort((a, b) => a.startMs - b.startMs)[0];
+    if (!target) return null;
+    set(cancelJob(state, target.id, from));
+    return target.customer.name;
+  },
+  /** Jump to 5:30 pm, so the day's jobs are done and aftercare is on its way. */
+  jumpToEndOfDay() {
+    const from = nowMs();
+    let d = localDate(from);
+    let target = atLocal(d, 17 * 60 + 30);
+    for (let i = 0; target <= from + HOUR && i < 8; i++) { d = addDays(d, 1); target = atLocal(d, 17 * 60 + 30); }
+    set({ ...advance(state, from, target), clockOffsetMs: state.clockOffsetMs + (target - from) });
   },
   clearStorm() { set({ ...state, stormDays: [] }); },
   reset() { set(seedState(Date.now())); },

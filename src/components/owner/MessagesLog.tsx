@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { MessageSquareDashed } from "lucide-react";
+import { EmptyState } from "../EmptyState";
 import { Bubble } from "../PhoneThread";
 import type { Message, State } from "@/lib/model";
 import { cn } from "@/lib/utils";
@@ -31,7 +33,11 @@ export function MessagesLog({ state, now }: { state: State; now: number }) {
         {all.slice(0, limit).map((m) => <Bubble key={m.id} m={m} showTo />)}
       </ul>
       {all.length > limit && <button type="button" className="font-semibold text-fern underline underline-offset-4" onClick={() => setLimit(limit + 25)}>Show older messages ({all.length - limit} more)</button>}
-      {!all.length && <p className="text-muted-foreground">Nothing yet.</p>}
+      {!all.length && (
+        <EmptyState icon={MessageSquareDashed} title={filter === "all" ? "No messages yet" : "Nothing in this filter yet"}>
+          Every reminder, rain offer and reply Fernhill sends in Dario's name lands here. Book something, or use the demo controls to fast-forward.
+        </EmptyState>
+      )}
     </section>
   );
 }

@@ -6,6 +6,7 @@ import { cancelJob, chooseRainOption, claimOffer, confirmJob, createJob, joinWai
 import { emptyState } from "../seed";
 import { BookingError } from "../model";
 import { HOUR, addDays, atLocal, localDate } from "../time";
+import { forecastFor } from "../weather";
 
 const NOW = atLocal("2026-09-30", 10 * 60); // Wednesday
 const day = (n: number) => addDays("2026-09-30", n);
@@ -262,5 +263,237 @@ describe("neighbour deals (route-density pricing)", () => {
     const { job } = createJob(emptyState(NOW), seFull(atLocal(day(3), 9 * 60)), NOW);
     expect(job.discountCents).toBe(0);
     expect(job.totalCents).toBe(8500);
+  });
+});
+
+describe("the rain promise: '$25 holds the slot. Fully refundable if we have to move you for rain.'", () => {
+  const outdoor = () => createJob(emptyState(NOW), input({ parking: "driveway", startMs: atLocal(day(3), 10 * 60) }), NOW);
+
+  it("refunds a late cancellation once rain has touched the booking, but not otherwise", () => {
+    const { state, job } = outdoor();
+    const late = job.startMs - 5 * HOUR;
+    // Without rain, cancelling inside 24 hours keeps the deposit.
+    expect(cancelJob(state, job.id, late).jobs[0].depositState).toBe("kept");
+    // A rain offer marks the booking; from then on cancelling is a full refund at any time.
+    const stormy = tick({ ...state, stormDays: [localDate(job.startMs)] }, job.startMs - 40 * HOUR);
+    expect(stormy.jobs[0].rainAffected).toBe(true);
+    const cancelled = cancelJob(stormy, job.id, late);
+    expect(cancelled.jobs[0].depositState).toBe("refunded");
+    expect(cancelled.jobs[0].closedReason).toMatch(/rain/i);
+    expect(cancelled.messages.find((m) => m.kind === "cancelled")?.body).toMatch(/in full/);
+  });
+
+  it("also marks a booking that was moved for rain", () => {
+    const { state, job } = outdoor();
+    const storm = { ...state, stormDays: [localDate(job.startMs)] };
+    const s = advance(storm, job.startMs - 47 * HOUR, job.startMs - 30 * HOUR);
+    expect(s.jobs[0].startMs).not.toBe(job.startMs);
+    expect(s.jobs[0].rainAffected).toBe(true);
+  });
+
+  it("offers dry alternatives for a booking that doesn't exist yet", async () => {
+    const { dryOptions } = await import("../engine");
+    const s = { ...emptyState(NOW), stormDays: [day(3)] };
+    const opts = dryOptions(s, { startMs: atLocal(day(3), 10 * 60), durationMin: 120, zone: "NE", parking: "driveway" }, NOW, 3);
+    expect(opts.length).toBeGreaterThan(0);
+    expect(opts.every((ms) => localDate(ms) !== day(3))).toBe(true);
+  });
+});
+
+describe("one-tap drafted replies", () => {
+  it("drafts a reply for a rain booking with no dry slot, and sending it clears the flag and messages the customer", async () => {
+    const { draftForFlag } = await import("../drafts");
+    const { sendOwnerReply } = await import("../ops");
+    let { state, job } = createJob(emptyState(NOW), input({ parking: "driveway" }), NOW);
+    state = { ...state, jobs: state.jobs.map((j) => ({ ...j, ownerFlag: "Rain is forecast and no dry slot is open." })) };
+    job = state.jobs[0];
+    const draft = draftForFlag(job);
+    expect(draft).toMatch(/refunded in full/);
+    expect(draft).toContain(job.code);
+    const sent = sendOwnerReply(state, { jobId: job.id }, draft, NOW);
+    expect(sent.jobs[0].ownerFlag).toBeNull();
+    const m = sent.messages.find((x) => x.kind === "owner_reply")!;
+    expect(m).toMatchObject({ direction: "out", to: job.customer.phone, body: draft });
+    expect(sent.events.map((e) => e.kind)).toContain("owner_reply");
+  });
+
+  it("drafts a useful answer to an off-menu request, with a real link", async () => {
+    const { draftForInquiry } = await import("../drafts");
+    const { answerInquiry } = await import("../inquiry");
+    const { sendOwnerReply } = await import("../ops");
+    const { state, inquiry } = answerInquiry(emptyState(NOW), "(503) 555-0279", "Do you do ceramic coating? Just bought a Tesla, Pearl district", NOW);
+    expect(inquiry.status).toBe("needs_owner");
+    const draft = draftForInquiry(inquiry);
+    expect(draft).toMatch(/ceramic coating/);
+    expect(draft).toMatch(/fernhill\.app\/book\?/);
+    const sent = sendOwnerReply(state, { inquiryId: inquiry.id }, draft, NOW);
+    expect(sent.inquiries[0].status).toBe("answered");
+    expect(sent.messages.some((m) => m.kind === "owner_reply" && m.to === "(503) 555-0279")).toBe(true);
+  });
+});
+
+describe("the ledger's headline numbers", () => {
+  it("counts recovered no-shows in dollars and money booked ahead", async () => {
+    const { ledgerFor } = await import("../ledger");
+    const { seedState } = await import("../seed");
+    const now = atLocal("2026-09-30", 13 * 60);
+    const l = ledgerFor(seedState(now), now);
+    expect(l.recoveredCents).toBeGreaterThan(0);
+    expect(l.aheadJobs).toBeGreaterThan(0);
+    expect(l.aheadCents).toBeGreaterThan(0);
+    expect(l.messages).toBeGreaterThan(10);
+    expect(l.minutes).toBeGreaterThan(60);
+  });
+});
+
+describe("running behind: one tap tells everyone still to come today", () => {
+  const morning = () => atLocal(day(3), 7 * 60 + 30); // Saturday 7:30
+  const twoJobsToday = () => {
+    let s = emptyState(NOW);
+    const a = createJob(s, input({ startMs: atLocal(day(3), 9 * 60), service: "express", vehicle: { kind: "sedan", label: "car" } }), NOW);
+    s = a.state;
+    const b = createJob(s, { ...input({ zip: "97202", startMs: atLocal(day(3), 12 * 60), service: "express", vehicle: { kind: "sedan", label: "car" } }), customer: { name: "Second Sam", phone: "(503) 555-0000", email: "s@x.co" } }, NOW);
+    return { state: b.state, a: a.job, b: b.job };
+  };
+
+  it("shifts arrival for every job not yet started, texts each customer the new time, and leaves the booked slot alone", async () => {
+    const { reportDelay } = await import("../ops");
+    const { state, a, b } = twoJobsToday();
+    const { state: s, notified } = reportDelay(state, 20, morning());
+    expect(notified.sort()).toEqual(["Maya Thornton", "Second Sam"]);
+    expect(s.jobs.map((j) => j.delayMin)).toEqual([20, 20]);
+    expect(s.jobs.map((j) => j.startMs)).toEqual([a.startMs, b.startMs]); // the booked slot never moves
+    const texts = s.messages.filter((m) => m.kind === "delay");
+    expect(texts).toHaveLength(2);
+    expect(texts[0].body).toMatch(/20 min behind/);
+    expect(texts[0].body).toContain("9:20 AM"); // 9:00 + 20
+    expect(s.events.map((e) => e.kind)).toContain("delay");
+  });
+
+  it("only warns jobs that haven't started: the one in progress is left alone", async () => {
+    const { reportDelay } = await import("../ops");
+    const { state } = twoJobsToday();
+    const { notified } = reportDelay(state, 15, atLocal(day(3), 9 * 60 + 30)); // first job under way
+    expect(notified).toEqual(["Second Sam"]);
+  });
+
+  it("stacks, moves the on-the-way text and the finish with the delay, and refuses absurd delays", async () => {
+    const { reportDelay } = await import("../ops");
+    const { plan } = await import("../automations");
+    const { state, b } = twoJobsToday();
+    let s = reportDelay(state, 20, morning()).state;
+    s = reportDelay(s, 30, morning() + HOUR).state;
+    const j = s.jobs.find((x) => x.id === b.id)!;
+    expect(j.delayMin).toBe(50);
+    const omw = plan(j).find((p) => p.kind === "omw")!;
+    expect(omw.at).toBe(b.startMs + 50 * 60_000 - 30 * 60_000);
+    expect(() => reportDelay(s, 90, morning() + 2 * HOUR)).toThrowError(/call people/);
+  });
+
+  it("errors when there is nothing left today, and a customer's own move clears the delay", async () => {
+    const { reportDelay } = await import("../ops");
+    const { state, a } = twoJobsToday();
+    expect(() => reportDelay(state, 20, atLocal(day(3), 18 * 60))).toThrowError(/no jobs left today/);
+    const delayed = reportDelay(state, 20, morning()).state;
+    const moved = moveJob(delayed, a.id, atLocal(day(6), 9 * 60), morning() - 30 * HOUR); // Tuesday
+    expect(moved.jobs.find((x) => x.id === a.id)!.delayMin).toBe(0);
+  });
+
+  it("the tracker and ETA follow the delay", async () => {
+    const { reportDelay } = await import("../ops");
+    const { withDelay, etaFor } = await import("../tracker");
+    const { state, a } = twoJobsToday();
+    const s = reportDelay(state, 20, morning()).state;
+    const jobs = withDelay(s.jobs);
+    expect(jobs[0].startMs).toBe(a.startMs + 20 * 60_000);
+    // At 9:05 an on-time Bertha is already working; a 20-minute-late one hasn't even left the base.
+    expect(etaFor(withDelay(state.jobs), a.id, 9 * 60 + 5).state).toBe("working");
+    expect(etaFor(withDelay(s.jobs), a.id, 9 * 60 + 5).state).toBe("jobs_ahead");
+    // ...and the customer is told the drive: 10 minutes out, arriving 9:20.
+    expect(etaFor(withDelay(s.jobs), a.id, 9 * 60 + 12)).toMatchObject({ state: "on_the_way", minutesToArrival: 8 });
+  });
+});
+
+describe("care plans: repeat customers rebook themselves", () => {
+  const planJob = (over: Partial<BookingInput> = {}) => createJob(emptyState(NOW), input({ plan: 6, parking: "garage", service: "express", vehicle: { kind: "sedan", label: "car" }, startMs: atLocal(day(3), 9 * 60), ...over }), NOW);
+
+  it("books the next visit the same weekday and time, N weeks on, at 10% off and with no deposit", async () => {
+    const { scheduleNextVisit } = await import("../ops");
+    const { state, job } = planJob();
+    const s = structuredClone(state);
+    const next = scheduleNextVisit(s, s.jobs[0], job.startMs + 2 * HOUR)!;
+    expect(next).not.toBeNull();
+    expect(localDate(next.startMs)).toBe(addDays(localDate(job.startMs), 42));
+    expect(next.startMs).toBe(atLocal(addDays(localDate(job.startMs), 42), 9 * 60));
+    expect(next.source).toBe("plan");
+    expect(next.plan).toEqual({ everyWeeks: 6 });
+    expect(next.depositCents).toBe(0);
+    expect(next.discountCents).toBe(900); // 10% of $85 is $8.50, rounded to the dollar
+    expect(next.totalCents).toBe(7600);
+    expect(s.messages.some((m) => m.kind === "plan_booked" && m.jobId === next.id)).toBe(true);
+  });
+
+  it("finishing a plan visit books the next one automatically; a job without a plan books nothing", () => {
+    // The customer taps Confirm the day before, as a real one would, so the visit isn't released.
+    const finish = (booked: { state: ReturnType<typeof emptyState>; job: { id: string; startMs: number } }) => {
+      const s = confirmJob(advance(booked.state, NOW, booked.job.startMs - 23 * HOUR), booked.job.id, booked.job.startMs - 23 * HOUR);
+      return advance(s, booked.job.startMs - 23 * HOUR, booked.job.startMs + 6 * HOUR);
+    };
+    const done = finish(planJob());
+    expect(done.jobs[0].status).toBe("completed");
+    expect(done.jobs.filter((j) => j.source === "plan")).toHaveLength(1);
+    const plain = finish(createJob(emptyState(NOW), input({ parking: "garage", startMs: atLocal(day(3), 9 * 60) }), NOW));
+    expect(plain.jobs[0].status).toBe("completed");
+    expect(plain.jobs.filter((j) => j.source === "plan")).toHaveLength(0);
+  });
+
+  it("takes the nearest open slot when the usual time is gone", async () => {
+    const { scheduleNextVisit } = await import("../ops");
+    const { state, job } = planJob();
+    const target = addDays(localDate(job.startMs), 42);
+    // Someone else holds 9:00 that day.
+    const blocked = createJob(state, { ...input({ parking: "garage", service: "express", vehicle: { kind: "sedan", label: "car" }, startMs: atLocal(target, 9 * 60) }), customer: { name: "Other", phone: "9", email: "o@x.co" } }, atLocal(addDays(target, -3), 10 * 60));
+    const s = structuredClone(blocked.state);
+    const next = scheduleNextVisit(s, s.jobs[0], job.startMs + 2 * HOUR)!;
+    expect(next.startMs).not.toBe(atLocal(target, 9 * 60));
+    expect(Math.abs(next.startMs - atLocal(target, 9 * 60))).toBeLessThan(3 * 24 * HOUR);
+  });
+
+  it("lets the customer skip a visit (the plan carries on) or end the plan", async () => {
+    const { scheduleNextVisit, skipVisit, endPlan } = await import("../ops");
+    const { state, job } = planJob();
+    const withNext = structuredClone(state);
+    const next = scheduleNextVisit(withNext, withNext.jobs[0], job.startMs + 2 * HOUR)!;
+    const skipped = skipVisit(withNext, next.id, job.startMs + 3 * HOUR);
+    expect(skipped.jobs.find((j) => j.id === next.id)!.status).toBe("cancelled");
+    const following = skipped.jobs.filter((j) => j.source === "plan" && j.status === "booked");
+    expect(following).toHaveLength(1);
+    expect(localDate(following[0].startMs)).toBe(addDays(localDate(next.startMs), 42));
+    expect(skipped.messages.find((m) => m.kind === "cancelled" && m.jobId === next.id)!.body).toMatch(/Nothing was charged/);
+    const ended = endPlan(skipped, following[0].id);
+    expect(ended.jobs.find((j) => j.id === following[0].id)!.plan).toBeNull();
+    expect(() => skipVisit(ended, following[0].id, job.startMs + 4 * HOUR)).toThrowError(/isn't on a care plan/);
+  });
+});
+
+describe("ceramic sealant needs a dry day outdoors to cure", () => {
+  // A deterministic forecast: find a day with 40–69% rain (wet enough to matter for sealant, dry enough for a normal wash).
+  const middling = (() => { for (let i = 1; i < 60; i++) { const d = addDays("2026-10-06", i); if ([2, 3, 4, 5, 6].includes(new Date(`${d}T12:00:00Z`).getUTCDay())) { const f = forecastFor(d); if (f.rain >= 40 && f.rain < 70) return d; } } throw new Error("no middling day found"); })();
+  const NOW2 = atLocal(addDays(middling, -6), 10 * 60);
+
+  it("offers no slots on a 40%+ day for an outdoor job with sealant, but still offers them for a plain wash or a garage", async () => {
+    const { slotsByDay } = await import("../engine");
+    const s = emptyState(NOW2);
+    const wet = (needsDry: boolean) => slotsByDay(s, 90, "NE", NOW2, undefined, { needsDry }).find((d) => d.date === middling)!;
+    expect(wet(true).slots).toEqual([]);
+    expect(wet(true).reason).toBe("wet");
+    expect(wet(false).slots.length).toBeGreaterThan(0);
+  });
+
+  it("refuses to book it, and allows it in a garage", () => {
+    const base = { startMs: atLocal(middling, 10 * 60), addons: ["sealant" as const], service: "express" as const, vehicle: { kind: "sedan" as const, label: "car" } };
+    expect(() => createJob(emptyState(NOW2), input({ ...base, parking: "driveway" }), NOW2)).toThrowError(/dry day to cure/);
+    expect(() => createJob(emptyState(NOW2), input({ ...base, parking: "garage" }), NOW2)).not.toThrow();
+    expect(() => createJob(emptyState(NOW2), input({ ...base, parking: "driveway", addons: [] }), NOW2)).not.toThrow();
   });
 });

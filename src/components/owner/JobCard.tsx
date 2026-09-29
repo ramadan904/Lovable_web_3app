@@ -63,6 +63,8 @@ export function JobCard({ job, stormDays, compact = false }: { job: Job; stormDa
         {(job.status === "booked") && <p className="rounded-md bg-sun-soft px-3 py-2 text-sm text-sun-ink">If they haven't confirmed by {fmtTime(job.startMs - 3 * HOUR)}, the slot goes to the waitlist automatically.</p>}
         {job.rainOffer && <p className="rounded-md bg-rain-soft px-3 py-2 text-sm text-rain">Rain offer sent. Options are waiting on the customer; the first is taken automatically if they don't pick.</p>}
         {(job.dealMin ?? 0) > 0 && <p className="rounded-md bg-fern-soft px-3 py-2 text-sm text-fern-ink">Neighbour deal: right next to another {ZONES[job.zone].name} job, so about {job.dealMin} min less driving. The customer paid {dollars(job.discountCents)} less.</p>}
+        {job.delayMin > 0 && <p className="rounded-md bg-sun-soft px-3 py-2 text-sm text-sun-ink">Running about {job.delayMin} min behind: the customer was told, and expects you around {fmtTime(job.startMs + job.delayMin * 60_000)}.</p>}
+        {job.plan && <p className="rounded-md bg-fern-soft px-3 py-2 text-sm text-fern-ink">Care plan: every {job.plan.everyWeeks} weeks{job.source === "plan" ? ", booked automatically after their last visit, 10% off, no deposit" : ". The next visit is booked automatically when this one is done"}.</p>}
         {job.movedFrom.length > 0 && <p className="text-sm text-muted-foreground">Moved from {fmtDay(job.movedFrom[job.movedFrom.length - 1])} by the customer. You did nothing.</p>}
         {job.status === "cancelled" && <p className="flex items-center gap-2 text-sm text-muted-foreground"><Ban className="size-4" aria-hidden="true" />{job.closedReason}</p>}
       </div>

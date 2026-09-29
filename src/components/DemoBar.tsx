@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { CloudLightning, FastForward, RotateCcw, SunMedium, FlaskConical, X } from "lucide-react";
+import { Clock4, CloudLightning, FastForward, Moon, RotateCcw, SunMedium, FlaskConical, UserX, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { useNow } from "@/hooks/useNow";
@@ -23,7 +23,7 @@ export function DemoBar() {
     const r = actions.stormOnBusiestOutdoorDay();
     if (!r) return toast("No outdoor jobs left to rain on.", { description: "Reset the demo for a fresh week." });
     toast.success(`Heavy rain forecast for ${fmtDate(r.date, "EEEE, MMM d")}`, {
-      description: r.jumpedHours ? `Clock moved ${r.jumpedHours} h forward to the 48-hour rain check. Watch the messages: nobody had to lift a finger.` : "The 48-hour rain check ran. Watch the messages.",
+      description: r.jumpedHours ? `The whole app turns to its rain palette. Clock moved ${r.jumpedHours} h forward to the 48-hour rain check. Watch the messages: nobody had to lift a finger.` : "The app turns to its rain palette and the 48-hour rain check ran. Watch the messages.",
     });
   };
 
@@ -55,6 +55,14 @@ export function DemoBar() {
       <div className="grid gap-2">
         <Button variant="sun" size="sm" onClick={storm}><CloudLightning /> Storm hits the busiest outdoor day</Button>
         <div className="grid grid-cols-2 gap-2">
+          <Button variant="outline" size="sm" className="border-background/30 bg-transparent text-background hover:bg-background/10 hover:text-background" onClick={() => { done(); actions.fastForward(1); toast("Fast-forwarded 1 hour", { description: "Reminders, nudges and releases fire as their times pass." }); }}>
+            <FastForward /> +1 hour
+          </Button>
+          <Button variant="outline" size="sm" className="border-background/30 bg-transparent text-background hover:bg-background/10 hover:text-background" onClick={() => { done(); actions.jumpToEndOfDay(); toast("Jumped to 5:30 pm", { description: "The day's jobs are done and aftercare texts are on their way." }); }}>
+            <Moon /> End of day
+          </Button>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
           <Button variant="outline" size="sm" className="border-background/30 bg-transparent text-background hover:bg-background/10 hover:text-background" onClick={() => { done(); actions.fastForward(6); toast(`Fast-forwarded 6 hours`, { description: "Everything scheduled in between just happened." }); }}>
             <FastForward /> +6 hours
           </Button>
@@ -62,6 +70,23 @@ export function DemoBar() {
             <SunMedium /> Next job morning
           </Button>
         </div>
+        <Button variant="outline" size="sm" className="border-background/30 bg-transparent text-background hover:bg-background/10 hover:text-background" onClick={() => {
+          done();
+          const who = actions.demoCancel();
+          if (who) toast.success(`${who} cancelled`, { description: "Watch the Waitlist panel: the slot is offered to the first person whose job fits." });
+          else toast("Nothing far enough ahead to cancel for free.", { description: "Reset the demo for a fresh week." });
+        }}>
+          <UserX /> A customer cancels
+        </Button>
+        <Button variant="outline" size="sm" className="border-background/30 bg-transparent text-background hover:bg-background/10 hover:text-background" onClick={() => {
+          done();
+          try {
+            const r = actions.demoRunningBehind(20);
+            toast.success(`${r.notified.length} ${r.notified.length === 1 ? "customer" : "customers"} told: running 20 min behind`, { description: `${r.jumped ? "Jumped to the next job morning first. " : ""}Each got a text with a new arrival, and their live map moved.` });
+          } catch { toast("No jobs left to be late for.", { description: "Reset the demo for a fresh week." }); }
+        }}>
+          <Clock4 /> Dario runs 20 min behind
+        </Button>
         <div className="grid grid-cols-2 gap-2">
           <Button variant="outline" size="sm" className="border-background/30 bg-transparent text-background hover:bg-background/10 hover:text-background" onClick={() => { done(); actions.clearStorm(); toast("Forecast cleared"); }}>
             Clear storm

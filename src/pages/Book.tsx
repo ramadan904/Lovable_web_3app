@@ -3,12 +3,13 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeft, ArrowRight, Check, Clock, CloudRain, LockKeyhole, MapPin, Umbrella } from "lucide-react";
 import { toast } from "sonner";
 import { SlotPicker } from "@/components/SlotPicker";
+import { WeatherStatus } from "@/components/WeatherStatus";
 import { Button } from "@/components/ui/button";
 import { Input, Textarea } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useNow } from "@/hooks/useNow";
 import {
-  ADDONS, DEPOSIT_CENTS, PARKING, SERVICES, VEHICLES, ZONES, dollars, hoursLabel, isCovered, quote, zoneForZip,
+  ADDONS, DEPOSIT_CENTS, PARKING, PLAN_DISCOUNT, PLAN_WEEKS, SERVICES, VEHICLES, ZONES, dollars, hoursLabel, isCovered, needsDryDay, quote, zoneForZip,
   type AddonKey, type Parking, type ServiceKey, type VehicleKind,
 } from "@/lib/business";
 import { BookingError } from "@/lib/model";
@@ -30,6 +31,8 @@ interface Form {
   gateCode: string;
   notes: string;
   startMs: number | null;
+  /** Care plan: repeat every this many weeks, or none. */
+  plan: number | null;
   name: string;
   phone: string;
   email: string;
@@ -45,7 +48,7 @@ function initialForm(p: URLSearchParams): { form: Form; step: number } {
   const pk = p.get("p");
   const parking = pk && pk in PARKING ? (pk as Parking) : null;
   const t = Number(p.get("t")) || null;
-  const form: Form = { vehicle, label: "", service, addons, zip, address: "", parking, gateCode: "", notes: "", startMs: t, name: "", phone: "", email: "" };
+  const form: Form = { vehicle, label: "", service, addons, zip, address: "", parking, gateCode: "", notes: "", startMs: t, plan: null, name: "", phone: "", email: "" };
   const step = !vehicle || !service ? 0 : 1;
   return { form, step };
 }
@@ -135,7 +138,7 @@ export default function Book() {
           customer: { name: form.name, phone: form.phone, email: form.email },
           vehicle: { kind: form.vehicle!, label: form.label.trim() || VEHICLES[form.vehicle!].name.toLowerCase() },
           service: form.service!, addons: form.addons, zip: form.zip, address: form.address, parking: form.parking!,
-          access: { gateCode: form.gateCode, notes: form.notes }, startMs: form.startMs!,
+          access: { gateCode: form.gateCode, notes: form.notes }, startMs: form.startMs!, plan: form.plan,
         });
         nav(`/b/${job.code}?new=1`);
       } catch (err) {
@@ -278,6 +281,7 @@ export default function Book() {
                     </RadioCard>
                   ))}
                 </div>
+                {form.parking && <WeatherStatus parking={form.parking} className="mt-4" />}
               </fieldset>
               <div className="grid gap-5 sm:grid-cols-2">
                 <Field id="gate" label="Gate or door code (optional)" hint="Only Dario sees this, and only on the day.">
@@ -293,7 +297,7 @@ export default function Book() {
           {step === 2 && q && zone && form.parking && (
             <div className="space-y-6">
               <SlotPicker
-                durationMin={q.durationMin} zone={zone} parking={form.parking} now={now} value={form.startMs} showDeals
+                durationMin={q.durationMin} zone={zone} parking={form.parking} now={now} value={form.startMs} showDeals needsDry={needsDryDay(form.addons, form.parking)}
                 onChange={(ms) => set("startMs", ms)}
                 whenEmpty={<WaitlistForm form={form} set={set} onSubmit={joinWaitlist} done={waitlisted} error={error} />}
               />
@@ -309,16 +313,39 @@ export default function Book() {
             </div>
           )}
 
-          {step === 3 && q && form.startMs && (
+          {step === 3 && q && form.startMs && zone && form.parking && (
             <div className="space-y-6">
+              <ReviewCard form={form} q={q} zone={zone} onChangeTime={() => setStep(2)} />
+              <WeatherStatus
+                parking={form.parking} startMs={form.startMs} durationMin={q.durationMin} zone={zone}
+                onPick={(ms) => { set("startMs", ms); toast.success("Switched to a dry time"); }}
+              />
               <div className="grid gap-5 sm:grid-cols-2">
                 <Field id="name" label="Your name"><Input id="name" autoComplete="name" value={form.name} onChange={(e) => set("name", e.target.value)} /></Field>
                 <Field id="phone" label="Mobile number" hint="For your reminders. Reply C to confirm, or tap the link."><Input id="phone" type="tel" autoComplete="tel" value={form.phone} onChange={(e) => set("phone", e.target.value)} placeholder="(503) 555-0100" aria-describedby="phone-hint" /></Field>
               </div>
               <Field id="email" label="Email"><Input id="email" type="email" autoComplete="email" value={form.email} onChange={(e) => set("email", e.target.value)} /></Field>
 
+              <fieldset className="rounded-lg border bg-card p-5">
+                <legend className="px-1 font-display text-lg font-bold">Keep it clean? <span className="text-sm font-medium text-muted-foreground">(optional)</span></legend>
+                <p className="mb-3 text-sm text-muted-foreground">
+                  Choose a care plan and we book your next visit for you after each one: the same weekday and time if it's free, otherwise the nearest slot. <strong className="text-foreground">{Math.round(PLAN_DISCOUNT * 100)}% off every visit after this one, no deposit after the first.</strong> Skip or stop any time.
+                </p>
+                <div className="grid gap-2 sm:grid-cols-4">
+                  {[null, ...PLAN_WEEKS].map((w) => (
+                    <RadioCard key={String(w)} name="plan" value={String(w)} checked={form.plan === w} onChange={() => set("plan", w)}>
+                      <span className="font-display text-base font-bold">{w === null ? "Just this once" : `Every ${w} weeks`}</span>
+                      <span className="text-xs text-muted-foreground">{w === null ? "No plan" : w === 6 ? "Most popular" : `${Math.round(PLAN_DISCOUNT * 100)}% off after`}</span>
+                    </RadioCard>
+                  ))}
+                </div>
+              </fieldset>
+
               <div className="card space-y-3 p-5">
-                <h3 className="flex items-center gap-2 text-lg font-bold"><LockKeyhole className="size-4 text-fern" aria-hidden="true" /> {dollars(DEPOSIT_CENTS)} deposit holds your time</h3>
+                <h3 className="flex items-center gap-2 text-lg font-bold"><LockKeyhole className="size-4 text-fern" aria-hidden="true" /> {dollars(DEPOSIT_CENTS)} holds the slot</h3>
+                <p className="rounded-md bg-fern-soft px-3 py-2 font-semibold text-fern-ink">
+                  {dollars(DEPOSIT_CENTS)} holds the slot. Fully refundable if we have to move you for rain.
+                </p>
                 <p className="text-sm text-muted-foreground">
                   It comes off your total. It exists because one no-show costs a solo detailer a whole job, so here's how it works, in plain words:
                 </p>
@@ -326,7 +353,7 @@ export default function Book() {
                   <li>Move or cancel free up to 24 hours before. The deposit is refunded or carried over.</li>
                   <li>We text you the day before. Tap <strong>Confirm</strong> and you're set.</li>
                   <li>No answer by three hours before? We release the slot to the waitlist and keep the deposit.</li>
-                  <li>Rain on an outdoor job? We move you free, to a dry day you choose.</li>
+                  <li>Rain on an outdoor job? We move you free, to a dry day you choose. If you'd rather not move, cancel for a full refund at any time.</li>
                 </ul>
                 <p className="rounded-md bg-sun-soft px-3 py-2 text-sm font-medium text-sun-ink">Demo: no card is charged. In production the deposit runs through Stripe.</p>
               </div>
@@ -349,6 +376,45 @@ export default function Book() {
         <Summary form={form} q={q} zone={zone} covered={covered} />
       </div>
     </div>
+  );
+}
+
+function ReviewCard({ form, q, zone, onChangeTime }: { form: Form; q: ReturnType<typeof quote>; zone: NonNullable<ReturnType<typeof zoneForZip>>; onChangeTime: () => void }) {
+  const state = useStore();
+  const start = form.startMs!;
+  const end = start + q.durationMin * 60_000;
+  const deal = neighbourDeal(state, { startMs: start, durationMin: q.durationMin, zone });
+  const total = q.totalCents - (deal?.discountCents ?? 0);
+  const covered = form.parking ? isCovered(form.parking) : false;
+  const rows: [string, React.ReactNode][] = [
+    ["Service", <>{SERVICES[form.service!].name}{form.addons.length > 0 && <span className="text-muted-foreground"> + {form.addons.map((a) => ADDONS[a].name.toLowerCase()).join(", ")}</span>}</>],
+    ["Vehicle", form.label ? <span className="capitalize">{form.label}</span> : VEHICLES[form.vehicle!].name],
+    ["Where", <>{form.address}, {ZONES[zone].name}</>],
+    ["Parking", <span className={covered ? "text-fern-ink" : "text-rain"}>{PARKING[form.parking!].name} · {covered ? "covered, not weather-sensitive" : "outdoors, weather-sensitive"}</span>],
+    ...(form.plan ? [["Care plan", <>Every {form.plan} weeks: the next visit is booked for you after each one, {Math.round(PLAN_DISCOUNT * 100)}% off, no deposit after this first visit</>] as [string, React.ReactNode]] : []),
+    ["Time window", <><strong>{fmtDayLong(start)}</strong>, {fmtTime(start)} to about {fmtTime(end)} <span className="text-muted-foreground">({hoursLabel(q.durationMin)} on site)</span></>],
+  ];
+  return (
+    <section aria-label="Review your booking" className="card overflow-hidden">
+      <div className="flex items-center justify-between gap-3 border-b bg-muted/60 px-5 py-3">
+        <h3 className="font-display text-lg font-extrabold">Check it over</h3>
+        <button type="button" onClick={onChangeTime} className="text-sm font-semibold text-fern underline underline-offset-4">Change time</button>
+      </div>
+      <dl className="grid gap-x-6 gap-y-3 p-5 text-sm sm:grid-cols-[7.5rem_1fr]">
+        {rows.map(([k, v]) => (
+          <div key={k} className="contents">
+            <dt className="eyebrow pt-0.5">{k}</dt>
+            <dd className="font-medium">{v}</dd>
+          </div>
+        ))}
+        <dt className="eyebrow pt-1">Price</dt>
+        <dd>
+          <span className="font-display text-2xl font-extrabold">{dollars(total)}</span>
+          {deal && <span className="chip ml-2 border-sun/50 bg-sun-soft text-sun-ink">−{dollars(deal.discountCents)} neighbour deal</span>}
+          <span className="mt-0.5 block text-muted-foreground">{dollars(DEPOSIT_CENTS)} due now, taken off this total. The rest is paid on the day.</span>
+        </dd>
+      </dl>
+    </section>
   );
 }
 

@@ -15,6 +15,8 @@ interface Props {
   value: number | null;
   onChange: (startMs: number) => void;
   excludeJobId?: string;
+  /** Sealant outdoors: only dry days will do, so wet days show nothing. */
+  needsDry?: boolean;
   /** Show neighbour deals: only when booking new (a move keeps the deal it was booked with). */
   showDeals?: boolean;
   /** Rendered when nothing is open, so the caller can offer the waitlist. */
@@ -22,14 +24,14 @@ interface Props {
 }
 
 /** Real availability only: every time listed here passed the same rules the server enforces. */
-export function SlotPicker({ durationMin, zone, parking, now, value, onChange, excludeJobId, showDeals = false, whenEmpty }: Props) {
+export function SlotPicker({ durationMin, zone, parking, now, value, onChange, excludeJobId, showDeals = false, needsDry = false, whenEmpty }: Props) {
   const state = useStore();
   const covered = isCovered(parking);
   const minute = Math.floor(now / 60_000);
   const days = useMemo(
-    () => slotsByDay(state, durationMin, zone, now, excludeJobId),
+    () => slotsByDay(state, durationMin, zone, now, excludeJobId, { needsDry }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [state, durationMin, zone, minute, excludeJobId],
+    [state, durationMin, zone, minute, excludeJobId, needsDry],
   );
   const dealOf = (ms: number) => (showDeals ? neighbourDeal(state, { startMs: ms, durationMin, zone }, excludeJobId) : null);
   const withSlots = days.filter((d) => d.slots.length);
@@ -44,10 +46,15 @@ export function SlotPicker({ durationMin, zone, parking, now, value, onChange, e
   }, [days, picked]);
 
   if (!withSlots.length) {
+    const wetOnly = needsDry && days.some((d) => d.reason === "wet");
     return (
       <div className="rounded-lg border border-dashed bg-muted/50 p-6 text-center">
-        <p className="font-display text-lg font-bold">Nothing open in the next three weeks</p>
-        <p className="mx-auto mt-1 max-w-md text-muted-foreground">Dario is one person with one van, and this stretch is full. Join the waitlist and you'll be texted the moment a slot frees up.</p>
+        <p className="font-display text-lg font-bold">{wetOnly ? "No dry day with a free slot in the next three weeks" : "Nothing open in the next three weeks"}</p>
+        <p className="mx-auto mt-1 max-w-md text-muted-foreground">
+          {wetOnly
+            ? "Ceramic spray sealant needs a dry day to cure outdoors. Choose a covered spot, or take the sealant off, and more days open up. Or join the waitlist."
+            : "Dario is one person with one van, and this stretch is full. Join the waitlist and you'll be texted the moment a slot frees up."}
+        </p>
         {whenEmpty}
       </div>
     );
@@ -59,6 +66,12 @@ export function SlotPicker({ durationMin, zone, parking, now, value, onChange, e
 
   return (
     <div className="space-y-5">
+      {needsDry && (
+        <p role="note" className="flex gap-2 rounded-md border border-rain/30 bg-rain-soft p-3 text-sm text-rain">
+          <CloudRain className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+          <span><strong>Ceramic spray sealant needs about four dry hours to cure.</strong> Outdoors, that means we can only offer dry days, so wet days are greyed out. In a garage or carport, any day works.</span>
+        </p>
+      )}
       <fieldset>
         <legend className="mb-2 text-sm font-semibold">Pick a day</legend>
         <div className="-mx-1 flex snap-x gap-2 overflow-x-auto px-1 pb-2 pt-3">
@@ -89,7 +102,7 @@ export function SlotPicker({ durationMin, zone, parking, now, value, onChange, e
                   <WeatherIcon f={d.forecast} className={cn("size-3.5", active && "!text-primary-foreground")} />
                   {d.forecast.rain}%
                 </span>
-                <span className="text-[0.7rem] font-medium opacity-80">{disabled ? "Full" : `${d.slots.length} times`}</span>
+                <span className="text-[0.7rem] font-medium opacity-80">{disabled ? (d.reason === "wet" ? "Needs dry" : "Full") : `${d.slots.length} ${d.slots.length === 1 ? "time" : "times"}`}</span>
                 {!disabled && d.slots.some((ms) => dealOf(ms)) && (
                   <span className={cn("mt-0.5 rounded-full px-1.5 py-px text-[0.65rem] font-bold", active ? "bg-sun text-sun-ink" : "bg-sun-soft text-sun-ink")}>Deals</span>
                 )}

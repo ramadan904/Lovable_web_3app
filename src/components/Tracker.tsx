@@ -3,7 +3,7 @@ import { Pause, Play, RadioTower, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ZONES } from "@/lib/business";
 import type { State } from "@/lib/model";
-import { DAY_RANGE, describeVan, etaFor, vanAt } from "@/lib/tracker";
+import { DAY_RANGE, describeVan, etaFor, vanAt, withDelay } from "@/lib/tracker";
 import { atLocal, fmtTime, localDate, localMinutes } from "@/lib/time";
 import { forecastFor } from "@/lib/weather";
 import { cn } from "@/lib/utils";
@@ -21,7 +21,7 @@ const STATUS_JOBS = ["booked", "confirmed", "completed"];
 
 /** Live position of the van, with a time scrubber and a "play the day" replay. */
 export function Tracker({ state, date, now, focusJobId }: Props) {
-  const jobs = useMemo(() => state.jobs.filter((j) => localDate(j.startMs) === date && STATUS_JOBS.includes(j.status)), [state.jobs, date]);
+  const jobs = useMemo(() => withDelay(state.jobs.filter((j) => localDate(j.startMs) === date && STATUS_JOBS.includes(j.status))), [state.jobs, date]);
   const isToday = localDate(now) === date;
   const nowMin = Math.min(DAY_RANGE.end, Math.max(DAY_RANGE.start - 30, localMinutes(now)));
   const [manual, setManual] = useState<number | null>(null);

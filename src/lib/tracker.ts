@@ -14,6 +14,11 @@ export const ZONE_XY: Record<ZoneKey, { x: number; y: number }> = {
   SW: { x: 33, y: 60 },
 };
 
+/** The day as it is actually going: every job shifted by the delay Dario reported. */
+export function withDelay(jobs: Job[]): Job[] {
+  return jobs.map((j) => (j.delayMin ? { ...j, startMs: j.startMs + j.delayMin * 60_000 } : j));
+}
+
 export type Phase = "at_base_early" | "loading" | "driving" | "setting_up" | "working" | "refilling" | "between" | "driving_home" | "at_base_done";
 
 export interface VanPos {

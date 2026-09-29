@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, Send } from "lucide-react";
+import { ArrowRight, MessageCircleQuestion, Send } from "lucide-react";
+import { EmptyState } from "@/components/EmptyState";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/input";
 import { bookingLink, parseInquiry } from "@/lib/inquiry";
@@ -40,6 +41,11 @@ export function Inquiries({ state, now }: { state: State; now: number }) {
         </div>
         <Button type="submit" disabled={!text.trim()}><Send /> Send</Button>
       </form>
+      {!state.inquiries.length && (
+        <EmptyState icon={MessageCircleQuestion} title="No inquiries yet">
+          Anyone who texts or types "can you do my car?" gets a priced answer with real times in seconds, and it appears here. Try one above.
+        </EmptyState>
+      )}
       <ul className="space-y-5">
         {state.inquiries.filter((q) => q.at <= now + 60_000).map((q) => <InquiryRow key={q.id} q={q} highlight={q.id === latest} />)}
       </ul>
