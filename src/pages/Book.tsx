@@ -12,8 +12,8 @@ import {
   type AddonKey, type Parking, type ServiceKey, type VehicleKind,
 } from "@/lib/business";
 import { BookingError } from "@/lib/model";
-import { validate } from "@/lib/engine";
-import { actions, getState, nowMs } from "@/lib/store";
+import { neighbourDeal, validate } from "@/lib/engine";
+import { actions, getState, nowMs, useStore } from "@/lib/store";
 import { fmtDayLong, fmtTime } from "@/lib/time";
 import { cn } from "@/lib/utils";
 
@@ -293,7 +293,7 @@ export default function Book() {
           {step === 2 && q && zone && form.parking && (
             <div className="space-y-6">
               <SlotPicker
-                durationMin={q.durationMin} zone={zone} parking={form.parking} now={now} value={form.startMs}
+                durationMin={q.durationMin} zone={zone} parking={form.parking} now={now} value={form.startMs} showDeals
                 onChange={(ms) => set("startMs", ms)}
                 whenEmpty={<WaitlistForm form={form} set={set} onSubmit={joinWaitlist} done={waitlisted} error={error} />}
               />
@@ -366,6 +366,9 @@ function WaitlistForm({ form, set, onSubmit, done, error }: { form: Form; set: <
 }
 
 function Summary({ form, q, zone, covered }: { form: Form; q: ReturnType<typeof quote> | null; zone: ReturnType<typeof zoneForZip>; covered: boolean }) {
+  const state = useStore();
+  const deal = q && zone && form.startMs ? neighbourDeal(state, { startMs: form.startMs, durationMin: q.durationMin, zone }) : null;
+  const total = q ? q.totalCents - (deal?.discountCents ?? 0) : 0;
   return (
     <aside aria-label="Your booking" className="lg:sticky lg:top-24 lg:self-start">
       <div className="card overflow-hidden">
@@ -381,7 +384,8 @@ function Summary({ form, q, zone, covered }: { form: Form; q: ReturnType<typeof 
                 <div className="flex justify-between"><dt className="text-muted-foreground">{SERVICES[form.service!].name}</dt><dd className="font-semibold">{dollars(q.serviceCents)}</dd></div>
                 {form.addons.map((a) => <div key={a} className="flex justify-between"><dt className="text-muted-foreground">{ADDONS[a].name}</dt><dd className="font-semibold">{dollars(ADDONS[a].cents)}</dd></div>)}
                 {zone && q.feeCents > 0 && <div className="flex justify-between"><dt className="text-muted-foreground">Travel ({ZONES[zone].name})</dt><dd className="font-semibold">{dollars(q.feeCents)}</dd></div>}
-                <div className="flex justify-between border-t pt-2 text-base"><dt className="font-bold">Total</dt><dd className="font-display text-lg font-extrabold">{dollars(q.totalCents)}</dd></div>
+                {deal && <div className="flex justify-between text-fern"><dt className="font-semibold">Neighbour deal</dt><dd className="font-bold">−{dollars(deal.discountCents)}</dd></div>}
+                <div className="flex justify-between border-t pt-2 text-base"><dt className="font-bold">Total</dt><dd className="font-display text-lg font-extrabold">{dollars(total)}</dd></div>
               </dl>
               <p className="flex items-center gap-2 text-muted-foreground"><Clock className="size-4" aria-hidden="true" /> About {hoursLabel(q.durationMin)} on site</p>
             </>

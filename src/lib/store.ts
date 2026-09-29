@@ -10,7 +10,7 @@ import { HOUR, addDays, atLocal, localDate, weekdayOf } from "./time";
 import { OPEN_WEEKDAYS, isCovered } from "./business";
 import { activeJobs } from "./engine";
 
-const KEY = "fernhill:demo:v1";
+const KEY = "fernhill:demo:v2";
 const MAX_AGE_MS = 6 * 24 * HOUR;
 
 let memory: string | null = null;

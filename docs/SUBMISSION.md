@@ -41,6 +41,7 @@ His real-world friction, which the build takes on directly:
 - **Rain rescheduling:** 48 hours out, an outdoor job in a forecast storm is offered the nearest dry slots; if the customer doesn't pick, the first is taken.
 - **No-show defence:** unconfirmed slots are released 3 hours out and offered to the waitlist, first whose job fits (checked against the drive), two hours to claim.
 - **Self-serve** move and cancel until 24 hours ahead, gate codes editable by the customer, refunds automatic.
+- **Neighbour deals**: route-density pricing. When a slot sits next to another job in the same area, Dario drives less, and the customer gets 50¢ off for every minute he saves. It fills the gaps in his route, cuts his driving, and gives customers a reason to pick the slot that's best for him.
 - **"Where's Bertha?"**: a live van tracker on a map of Portland. Customers watch the van drive to them with a live ETA, so nobody texts "where are you?". Dario can scrub and replay his whole day. Privacy is built in: customers only ever see their own stop named.
 - **"Handled for you"** ledger on Dario's console: messages sent, bookings taken, reschedules, gaps refilled, and a transparent estimate of hours saved. "Needs you" shows only what genuinely needs a human.
 
@@ -74,6 +75,7 @@ Record at 1440×900 (or a phone-width take for the mobile beat). Open **Demo con
 | 0:12 | Ask box | Tap the Subaru example → **Get real times** | "A customer writes the way they'd text a friend. Fernhill reads it, prices it, checks Dario's drive time, and offers three real slots. In seconds." |
 | 0:28 | Tap a time → Where step | Fill address, pick **Driveway** | "It knows her Outback with dog hair takes two and a half hours. She says the car is outside, and that matters later." |
 | 0:45 | When step | Point at day tiles and rain chips | "Only reachable times. Wet days are flagged; a dry day is recommended." |
+| 0:47 | When step, Southeast zip | Point at the "−$10" times | "And when Dario's already in her neighbourhood, the slot next to that job is cheaper. Every minute he doesn't drive is fifty cents off." |
 | 0:55 | You step → **Book** | Name, phone, email → Book | "A twenty-five dollar deposit holds it. Confirmed instantly." |
 | 1:05 | Confirmation | Scroll the queue | "Nothing left for anyone to do. Prep note, a one-tap confirm, a rain check, an on-my-way text are already queued." |
 | 1:15 | `/owner` | Show greeting, ledger tiles | "Dario's side. 'Nothing needs you' except one thing that really does: a request he doesn't offer. Everything else is done." |

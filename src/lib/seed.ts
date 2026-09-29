@@ -3,7 +3,7 @@
 // customers face (see __tests__/seed.test.ts).
 import { CONFIRM_NUDGE_H, OPEN_WEEKDAYS, RELEASE_H, quote, zoneForZip, type AddonKey, type Parking, type ServiceKey, type VehicleKind } from "./business";
 import { tick } from "./automations";
-import { checkDay, placementsOn } from "./engine";
+import { checkDay, neighbourDeal, placementsOn } from "./engine";
 import type { Job, State } from "./model";
 import { answerInquiry } from "./inquiry";
 import { pushEvent, sendForJob } from "./ops";
@@ -24,6 +24,8 @@ interface Spec {
   gate?: string;
   notes?: string;
   sim?: boolean;
+  /** Apply the neighbour-deal rule as it would have applied at booking. */
+  deal?: boolean;
 }
 
 const mins = (hhmm: string) => {
@@ -40,7 +42,7 @@ const FUTURE: Spec[] = [
   { day: 1, at: "11:30", name: "Renata Vasquez", phone: "(503) 555-0152", vehicle: ["sedan", "red Mazda 3"], service: "full", address: "1209 NW Overton St", zip: "97209", parking: "street", gate: "Lobby code 2290", notes: "Street parking only. Resident permit on the dash.", sim: false },
   { day: 1, at: "15:00", name: "Ben Kowalski", phone: "(503) 555-0167", vehicle: ["sedan", "silver Prius"], service: "express", address: "6810 SW Capitol Hwy", zip: "97219", parking: "garage", gate: "", notes: "Ring the bell for the garage.", sim: true },
   // Day 2
-  { day: 2, at: "10:00", name: "Lila Chen", phone: "(503) 555-0173", vehicle: ["suv", "blue Toyota RAV4"], service: "showroom", addons: ["sealant"], address: "2718 SE Clinton St", zip: "97202", parking: "carport", notes: "Selling it next month. Wants it spotless.", sim: true },
+  { day: 2, at: "10:00", name: "Lila Chen", phone: "(503) 555-0173", vehicle: ["suv", "blue Toyota RAV4"], service: "full", addons: ["sealant"], address: "2718 SE Clinton St", zip: "97202", parking: "carport", notes: "Selling it next month. Wants it spotless.", sim: true },
   // Day 3
   { day: 3, at: "9:30", name: "Marcus Webb", phone: "(503) 555-0189", vehicle: ["van", "white Ford Transit"], service: "full", address: "12810 SW Canyon Rd, Beaverton", zip: "97005", parking: "driveway", gate: "Gate 1880", notes: "Business van. Gate code after 8 am.", sim: false },
   { day: 3, at: "14:00", name: "Hannah Frost", phone: "(503) 555-0195", vehicle: ["sedan", "green Mini Cooper"], service: "interior", addons: ["odor"], address: "4433 NE Alberta St", zip: "97211", parking: "street", notes: "Spilled a smoothie two weeks ago.", sim: true },
@@ -58,6 +60,8 @@ const PAST: Spec[] = [
   { day: -3, at: "9:30", name: "Cole Bennett", phone: "(503) 555-0244", vehicle: ["sedan", "blue Subaru WRX"], service: "express", address: "3921 SE Division St", zip: "97202", parking: "street", sim: true },
   { day: -1, at: "13:00", name: "Leo Grant", phone: "(503) 555-0301", vehicle: ["sedan", "white Kia Soul"], service: "express", address: "4433 NE Alberta St", zip: "97211", parking: "street", sim: false },
   { day: -1, at: "13:00", name: "Sofia Marín", phone: "(503) 555-0312", vehicle: ["sedan", "red Fiat 500"], service: "express", address: "1820 NE Prescott St", zip: "97211", parking: "garage", sim: true },
+  { day: -3, at: "11:00", name: "Dev Patel", phone: "(503) 555-0324", vehicle: ["sedan", "grey Hyundai Elantra"], service: "interior", address: "3915 SE Division St", zip: "97202", parking: "garage", sim: true, deal: true },
+  { day: -4, at: "15:00", name: "Yuki Tanaka", phone: "(503) 555-0335", vehicle: ["sedan", "white Mini Cooper"], service: "express", address: "2211 NW Northrup St", zip: "97210", parking: "street", sim: true, deal: true },
   { day: -4, at: "11:00", name: "Ingrid Solberg", phone: "(503) 555-0256", vehicle: ["van", "grey Honda Odyssey"], service: "full", addons: ["pet"], address: "2140 NW Lovejoy St", zip: "97210", parking: "garage", sim: true },
 ];
 
@@ -85,7 +89,7 @@ function addSeedJob(s: State, spec: Spec, date: string, createdAt: number): Job 
     customer: { name: spec.name, phone: spec.phone, email: `${spec.name.split(" ")[0].toLowerCase()}@example.com` },
     vehicle: { kind: spec.vehicle[0], label: spec.vehicle[1] }, service: spec.service, addons, zip: spec.zip, zone,
     address: spec.address, parking: spec.parking, access: { gateCode: spec.gate ?? "", notes: spec.notes ?? "" },
-    startMs: atLocal(date, mins(spec.at)), durationMin: q.durationMin, totalCents: q.totalCents, depositCents: 2500, depositState: "held",
+    startMs: atLocal(date, mins(spec.at)), durationMin: q.durationMin, totalCents: q.totalCents, discountCents: 0, dealMin: 0, depositCents: 2500, depositState: "held",
     movedFrom: [], confirmedAt: null, closedAt: null, closedReason: null, rainOffer: null, ownerFlag: null,
     source: "web", simReplies: spec.sim ?? false,
   };
@@ -108,6 +112,24 @@ export function seedState(nowMs: number): State {
     const job = addSeedJob(s, spec, date, startMs - (3 + (s.seq % 3)) * DAY);
     job.simReplies = spec.name !== "Leo Grant" && spec.name !== "Sofia Marín";
   });
+
+  // Neighbour deals: priced by the same rule customers get (the neighbour is on the same day and zone).
+  for (const spec of PAST) {
+    if (!spec.deal) continue;
+    const job = s.jobs.find((j) => j.customer.name === spec.name);
+    if (!job) continue;
+    const d = neighbourDeal(s, { startMs: job.startMs, durationMin: job.durationMin, zone: job.zone }, job.id);
+    if (d) {
+      job.discountCents = d.discountCents;
+      job.dealMin = d.savedMin;
+      job.totalCents -= d.discountCents;
+      job.createdAt = job.startMs - DAY;
+      s.messages = s.messages.filter((m) => !(m.jobId === job.id && m.kind === "confirmation"));
+      s.events = s.events.filter((e) => !(e.jobId === job.id && e.kind === "booked"));
+      sendForJob(s, job, "confirmation", job.createdAt);
+      pushEvent(s, job.createdAt, "booked", job.id, `${job.customer.name} booked ${fmtDay(job.startMs)} at ${fmtTime(job.startMs)} (neighbour deal)`);
+    }
+  }
 
   // A week of history, so "handled for you" starts from real numbers -------------
   const byName = (n: string) => s.jobs.find((j) => j.customer.name === n);

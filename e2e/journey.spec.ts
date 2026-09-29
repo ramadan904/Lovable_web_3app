@@ -189,3 +189,38 @@ test("every fast-forward click moves the demo clock on screen straight away", as
   }
   expect(seen.size).toBe(4);
 });
+
+test("a neighbour deal shows on the calendar, comes off the price, and follows the booking", async ({ page }) => {
+  await page.goto("/book?v=sedan&s=express&zip=97202&p=garage");
+  await page.getByLabel("Street address").fill("1 Deal St");
+  await page.getByRole("button", { name: /Continue/ }).click();
+
+  // Look through the days for a slot next to another Southeast job.
+  const dealChip = page.locator("fieldset button[aria-pressed]").filter({ hasText: /−\$\d+/ });
+  const days = dayButtons(page);
+  const n = await days.count();
+  let found = false;
+  for (let i = 0; i < n && !found; i++) {
+    await days.nth(i).click();
+    if ((await dealChip.count()) > 0) found = true;
+  }
+  expect(found, "some day has a neighbour-deal slot").toBe(true);
+  await expect(page.getByText("Neighbour deal.")).toBeVisible();
+
+  const chip = dealChip.first();
+  const label = (await chip.getAttribute("aria-label")) ?? "";
+  const off = Number(label.match(/\$(\d+) off/)?.[1]);
+  await chip.click();
+  const summary = page.getByRole("complementary", { name: "Your booking" });
+  await expect(summary.getByText("Neighbour deal")).toBeVisible();
+  await expect(summary.getByText(`−$${off}`)).toBeVisible();
+  await expect(summary.getByText(`$${85 - off}`, { exact: true })).toBeVisible(); // express sedan is $85
+
+  await page.getByRole("button", { name: /Continue/ }).click();
+  await page.getByLabel("Your name").fill("Deal Dana");
+  await page.getByLabel("Mobile number").fill("(503) 555-0100");
+  await page.getByLabel("Email").fill("dana@example.com");
+  await page.getByRole("button", { name: /Book it/ }).click();
+  await expect(page.getByText("You're booked", { exact: true })).toBeVisible();
+  await expect(page.getByText(`−$${off} neighbour deal`)).toBeVisible();
+});

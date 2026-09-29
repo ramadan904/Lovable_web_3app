@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { AlertCircle, CheckCircle2, ChevronDown, Clock, MessageSquareText, Repeat, Timer, Wallet } from "lucide-react";
+import { AlertCircle, CheckCircle2, ChevronDown, Clock, MessageSquareText, Repeat, Route, Timer, Wallet } from "lucide-react";
 import { DaySheet } from "@/components/owner/DaySheet";
 import { Inquiries } from "@/components/owner/Inquiries";
 import { MessagesLog } from "@/components/owner/MessagesLog";
@@ -129,7 +129,7 @@ export default function Owner() {
             </ul>
           </div>
         )}
-        <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <dl className="grid grid-cols-2 gap-3 lg:grid-cols-3">
           <Tile icon={<Timer className="size-5" />} value={hm(ledger.minutes)} label="of admin you didn't do" accent />
           <Tile icon={<MessageSquareText className="size-5" />} value={String(ledger.messages)} label="texts and emails sent in your name" />
           <Tile icon={<CheckCircle2 className="size-5" />} value={String(ledger.bookings)} label="bookings taken with no back-and-forth" />
@@ -137,6 +137,7 @@ export default function Owner() {
           <Tile icon={<Clock className="size-5" />} value={String(ledger.inquiries)} label="inquiries answered in seconds" />
           <Tile icon={<CheckCircle2 className="size-5" />} value={String(ledger.confirmed)} label="one-tap confirmations collected" />
           <Tile icon={<Repeat className="size-5" />} value={String(ledger.released + ledger.backfilled)} label={`no-show gaps closed (${ledger.backfilled} refilled from the waitlist)`} />
+          <Tile icon={<Route className="size-5" />} value={hm(ledger.driveSavedMin)} label={`less driving from neighbour deals (customers saved $${Math.round(ledger.dealCents / 100)})`} />
           <Tile icon={<Wallet className="size-5" />} value={`$${Math.round(ledger.revenueCents / 100).toLocaleString()}`} label={`earned across ${ledger.jobsDone} finished jobs`} />
         </dl>
       </section>

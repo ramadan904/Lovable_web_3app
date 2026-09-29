@@ -72,3 +72,18 @@ describe("seed: the product looks alive on day one", () => {
     expect(days.filter((d) => d.slots.length && !d.forecast.wet).length).toBeGreaterThanOrEqual(1);
   });
 });
+
+describe("seed: neighbour deals", () => {
+  it("has real deals in the history and at least one deal slot coming up for a Southeast customer", async () => {
+    const { ledgerFor } = await import("../ledger");
+    const { slotsByDay, neighbourDeal } = await import("../engine");
+    const now = NOWS[2];
+    const s = seedState(now);
+    const l = ledgerFor(s, now);
+    expect(l.driveSavedMin).toBeGreaterThan(0);
+    expect(l.dealCents).toBeGreaterThan(0);
+    const days = slotsByDay(s, 90, "SE", now);
+    const deals = days.flatMap((d) => d.slots.filter((ms) => neighbourDeal(s, { startMs: ms, durationMin: 90, zone: "SE" })));
+    expect(deals.length).toBeGreaterThan(0);
+  });
+});

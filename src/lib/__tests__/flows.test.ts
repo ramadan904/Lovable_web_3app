@@ -221,3 +221,46 @@ describe("inquiry replies stay honest", () => {
     expect(inquiry.reply).toMatch(/your SUV/);
   });
 });
+
+describe("neighbour deals (route-density pricing)", () => {
+  const seFull = (startMs: number): BookingInput => input({ zip: "97202", startMs, service: "express", vehicle: { kind: "sedan", label: "car" } });
+
+  it("gives the slot right after a same-zone job a discount worth 50¢ per minute Dario doesn't drive", async () => {
+    const { neighbourDeal } = await import("../engine");
+    let s = emptyState(NOW);
+    s = createJob(s, seFull(atLocal(day(3), 9 * 60)), NOW).state; // SE, 60 min → 10:00
+    // Straight after, same zone: one trip instead of two. SE is 20 min from base, 10 within the zone.
+    const d = neighbourDeal(s, { startMs: atLocal(day(3), 10 * 60 + 30), durationMin: 60, zone: "SE" });
+    expect(d).toMatchObject({ savedMin: 20, discountCents: 1000 });
+    // Same zone but not adjacent in the day's order (another job sits between them): no deal.
+    const s2 = createJob(s, { ...seFull(atLocal(day(3), 11 * 60 + 30)), zip: "97212" }, NOW).state; // NE job in between
+    expect(neighbourDeal(s2, { startMs: atLocal(day(3), 13 * 60 + 30), durationMin: 60, zone: "SE" })).toBeNull();
+  });
+
+  it("gives no deal in the home zone, in a different zone, or on an empty day", async () => {
+    const { neighbourDeal } = await import("../engine");
+    let s = emptyState(NOW);
+    expect(neighbourDeal(s, { startMs: atLocal(day(3), 9 * 60), durationMin: 60, zone: "SE" })).toBeNull();
+    s = createJob(s, seFull(atLocal(day(3), 9 * 60)), NOW).state;
+    expect(neighbourDeal(s, { startMs: atLocal(day(3), 10 * 60 + 30), durationMin: 60, zone: "NE" })).toBeNull();
+    expect(neighbourDeal(s, { startMs: atLocal(day(3), 10 * 60 + 30), durationMin: 60, zone: "SW" })).toBeNull();
+  });
+
+  it("takes the deal off the price at booking and keeps it if the job later moves", () => {
+    let s = emptyState(NOW);
+    s = createJob(s, seFull(atLocal(day(3), 9 * 60)), NOW).state;
+    const { state, job } = createJob(s, seFull(atLocal(day(3), 10 * 60 + 30)), NOW);
+    expect(job.discountCents).toBe(1000);
+    expect(job.dealMin).toBe(20);
+    expect(job.totalCents).toBe(8500 - 1000); // express sedan is $85
+    expect(state.messages.find((m) => m.jobId === job.id)?.body).toMatch(/neighbour deal/);
+    const moved = moveJob(state, job.id, atLocal(day(2), 9 * 60), NOW);
+    expect(moved.jobs.find((j) => j.id === job.id)!.totalCents).toBe(7500);
+  });
+
+  it("the first booking of the day pays full price", () => {
+    const { job } = createJob(emptyState(NOW), seFull(atLocal(day(3), 9 * 60)), NOW);
+    expect(job.discountCents).toBe(0);
+    expect(job.totalCents).toBe(8500);
+  });
+});

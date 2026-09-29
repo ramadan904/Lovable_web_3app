@@ -19,7 +19,7 @@ export function composeForJob(kind: MessageKind, job: Job, extra: { options?: nu
     case "confirmation":
       return {
         channel: "email", direction: "out",
-        body: `You're booked. ${svc(job)} for your ${job.vehicle.label}, ${when(job.startMs)}, at ${job.address}. Total ${dollars(job.totalCents)}; your ${dollars(job.depositCents)} deposit is paid and comes off the total. ${BUSINESS.owner} brings water and power. Nothing to do until 24 hours before, when we'll ask you to tap Confirm. Change or cancel any time up to 24 hours ahead: ${link}`,
+        body: `You're booked. ${svc(job)} for your ${job.vehicle.label}, ${when(job.startMs)}, at ${job.address}. Total ${dollars(job.totalCents)}${job.discountCents ? ` (includes a ${dollars(job.discountCents)} neighbour deal: ${BUSINESS.ownerFirst} is already nearby that day)` : ""}; your ${dollars(job.depositCents)} deposit is paid and comes off the total. ${BUSINESS.owner} brings water and power. Nothing to do until 24 hours before, when we'll ask you to tap Confirm. Change or cancel any time up to 24 hours ahead: ${link}`,
       };
     case "prep":
       return {
