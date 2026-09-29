@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { expectBooked, trackErrors } from "./helpers";
 
 /** Book a Full Refresh for an SUV in a garage (so weather never interferes). */
 const TIME = /^\d{1,2}:\d{2} [AP]M$/;
@@ -27,7 +28,7 @@ async function bookThroughUi(page: Page, name = "Test Driver", dayIndex = 0) {
   await page.getByLabel("Mobile number").fill("(503) 555-0100");
   await page.getByLabel("Email").fill("driver@example.com");
   await page.getByRole("button", { name: /Book it/ }).click();
-  await expect(page.getByText("You're booked", { exact: true })).toBeVisible();
+  await expectBooked(page);
 }
 
 /** Use a demo control. On phones the panel closes itself after each action, so open it on demand. */
@@ -40,6 +41,7 @@ async function demo(page: Page, name: RegExp) {
 }
 
 test.beforeEach(async ({ page }) => {
+  trackErrors(page);
   await page.goto("/");
   await page.evaluate(() => localStorage.clear());
 });
@@ -221,6 +223,6 @@ test("a neighbour deal shows on the calendar, comes off the price, and follows t
   await page.getByLabel("Mobile number").fill("(503) 555-0100");
   await page.getByLabel("Email").fill("dana@example.com");
   await page.getByRole("button", { name: /Book it/ }).click();
-  await expect(page.getByText("You're booked", { exact: true })).toBeVisible();
+  await expectBooked(page);
   await expect(page.getByText(`−$${off} neighbour deal`)).toBeVisible();
 });

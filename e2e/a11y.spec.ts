@@ -1,5 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
+import { expectBooked, trackErrors } from "./helpers";
 
 const wcag = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"];
 
@@ -9,6 +10,7 @@ async function audit(page: import("@playwright/test").Page) {
 }
 
 test.beforeEach(async ({ page }) => {
+  trackErrors(page);
   await page.goto("/");
   await page.evaluate(() => localStorage.clear());
 });
@@ -64,7 +66,7 @@ test("booking confirmation and manage page", async ({ page }) => {
   await page.getByLabel("Mobile number").fill("5035550100");
   await page.getByLabel("Email").fill("a@example.com");
   await page.getByRole("button", { name: /Book it/ }).click();
-  await expect(page.getByText("You're booked", { exact: true })).toBeVisible();
+  await expectBooked(page);
   await audit(page);
 });
 
