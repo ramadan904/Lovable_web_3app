@@ -76,6 +76,7 @@ There is no backend to configure. The app runs on a seeded in-browser store, gen
 The app is static, so any static host works.
 
 - **GitHub Pages (included).** `.github/workflows/pages.yml` builds with `npm run build:pages` (relative paths, hash routing, so deep links and reloads work under `https://<owner>.github.io/<repo>/`) and publishes on every push to `main` or the working branch. One-time setup: **Settings → Pages → Build and deployment → Source: GitHub Actions**. Pages on a private repository needs a paid GitHub plan, and the `github-pages` environment may only allow deployments from the default branch (Settings → Environments).
+- **Vercel (config included).** `vercel.json` sets the Vite build and a rewrite so every route serves `index.html` (real paths like `/book` and `/b/FH-XXXX` work on reload). At vercel.com/new, import the GitHub repo and deploy the branch you want live; no environment variables are needed. Note that Vercel's production branch defaults to the repository's default branch.
 - **Anywhere else.** `npm run build` (normal paths, needs a "serve index.html for every route" rule) or `npm run build:pages` (works from any folder).
 - **Single-file page.** `npm run build:artifact` bundles everything into one HTML file, used for the hosted preview.
 
