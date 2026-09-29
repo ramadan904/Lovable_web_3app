@@ -2,8 +2,8 @@
 // browser, in tests, and (unchanged) could run in an edge function.
 import {
   DAY_END_MIN, DAY_START_MIN, GRID_MIN, HOME_ZONE, HORIZON_DAYS, LOAD_MIN, MAX_JOBS_PER_DAY,
-  MIN_NOTICE_H, OPEN_WEEKDAYS, RAIN_LIMIT, REFILL_MIN, isCovered, quote, travelMin,
-  type Parking, type ZoneKey,
+  MIN_NOTICE_H, OPEN_WEEKDAYS, CURE_RAIN_LIMIT, REFILL_MIN, isCovered, quote, rainLimitFor, travelMin,
+  type AddonKey, type Parking, type ZoneKey,
 } from "./business";
 import { ACTIVE, type Job, type State, type WaitlistEntry } from "./model";
 import { HOUR, MIN, addDays, atLocal, localDate, localMinutes, weekdayOf } from "./time";
@@ -60,22 +60,22 @@ export function placementsOn(state: State, date: string, excludeId?: string): Pl
 export type SlotProblem = DayProblem | "too_soon" | "too_far";
 
 /** Would this job fit in this place, given every other job on the calendar? */
-export function validate(state: State, cand: Placement, nowMs: number, excludeId?: string): SlotProblem | null {
+export function validate(state: State, cand: Placement, nowMs: number, excludeId?: string, opts: { ignoreHorizon?: boolean } = {}): SlotProblem | null {
   if (cand.startMs < nowMs + MIN_NOTICE_H * HOUR) return "too_soon";
-  if (cand.startMs > nowMs + HORIZON_DAYS * 24 * HOUR) return "too_far";
+  if (!opts.ignoreHorizon && cand.startMs > nowMs + HORIZON_DAYS * 24 * HOUR) return "too_far";
   const date = localDate(cand.startMs);
   const res = checkDay(date, [...placementsOn(state, date, excludeId), cand]);
   return res.ok ? null : res.reason;
 }
 
 export function findSlots(
-  state: State, durationMin: number, zone: ZoneKey, date: string, nowMs: number, excludeId?: string,
+  state: State, durationMin: number, zone: ZoneKey, date: string, nowMs: number, excludeId?: string, opts: { ignoreHorizon?: boolean } = {},
 ): number[] {
   if (!OPEN_WEEKDAYS.includes(weekdayOf(date))) return [];
   const out: number[] = [];
   for (let m = DAY_START_MIN; m + durationMin <= DAY_END_MIN; m += GRID_MIN) {
     const startMs = atLocal(date, m);
-    if (validate(state, { startMs, durationMin, zone }, nowMs, excludeId) === null) out.push(startMs);
+    if (validate(state, { startMs, durationMin, zone }, nowMs, excludeId, opts) === null) out.push(startMs);
   }
   return out;
 }
@@ -86,12 +86,12 @@ export interface DaySlots {
   slots: number[];
   forecast: Forecast;
   /** Why there is nothing to book. */
-  reason: "closed" | "full" | "past" | null;
+  reason: "closed" | "full" | "past" | "wet" | null;
 }
 
 /** Every day in the booking horizon, with its open slots and forecast. */
 export function slotsByDay(
-  state: State, durationMin: number, zone: ZoneKey, nowMs: number, excludeId?: string,
+  state: State, durationMin: number, zone: ZoneKey, nowMs: number, excludeId?: string, opts: { needsDry?: boolean } = {},
 ): DaySlots[] {
   const today = localDate(nowMs);
   const days: DaySlots[] = [];
@@ -99,18 +99,20 @@ export function slotsByDay(
     const date = addDays(today, i);
     const forecast = forecastFor(date, state.stormDays);
     const open = OPEN_WEEKDAYS.includes(weekdayOf(date));
-    const slots = open ? findSlots(state, durationMin, zone, date, nowMs, excludeId) : [];
-    days.push({ date, open, slots, forecast, reason: !open ? "closed" : slots.length ? null : "full" });
+    // Sealant outdoors needs a dry day to cure, so a wet day offers nothing.
+    const tooWet = opts.needsDry && forecast.rain >= CURE_RAIN_LIMIT;
+    const slots = open && !tooWet ? findSlots(state, durationMin, zone, date, nowMs, excludeId) : [];
+    days.push({ date, open, slots, forecast, reason: !open ? "closed" : tooWet ? "wet" : slots.length ? null : "full" });
   }
   return days;
 }
 
 /** Outdoor work in the rain is off the table. Covered spots never move. */
-export const isRainRisk = (state: State, startMs: number, parking: Parking) =>
-  !isCovered(parking) && forecastFor(localDate(startMs), state.stormDays).rain >= RAIN_LIMIT;
+export const isRainRisk = (state: State, startMs: number, parking: Parking, addons?: readonly AddonKey[]) =>
+  !isCovered(parking) && forecastFor(localDate(startMs), state.stormDays).rain >= rainLimitFor(addons, parking);
 
 /** The nearest dry options for a job that has to move, nearest day and same time of day first. */
-export type Movable = Pick<Job, "startMs" | "durationMin" | "zone" | "parking"> & { id?: string };
+export type Movable = Pick<Job, "startMs" | "durationMin" | "zone" | "parking"> & { id?: string; addons?: AddonKey[] };
 
 export function dryOptions(state: State, job: Movable, nowMs: number, count = 3): number[] {
   const today = localDate(nowMs);
@@ -120,7 +122,7 @@ export function dryOptions(state: State, job: Movable, nowMs: number, count = 3)
   for (let i = 0; i <= HORIZON_DAYS; i++) {
     const date = addDays(today, i);
     if (date === origDate) continue;
-    if (isRainRisk(state, atLocal(date, DAY_START_MIN), job.parking)) continue;
+    if (isRainRisk(state, atLocal(date, DAY_START_MIN), job.parking, job.addons)) continue;
     const slots = findSlots(state, job.durationMin, job.zone, date, nowMs, job.id);
     if (!slots.length) continue;
     const best = [...slots].sort((a, b) => Math.abs(localMinutes(a) - origMin) - Math.abs(localMinutes(b) - origMin))[0];
@@ -143,7 +145,7 @@ export function backfillCandidate(
     const durationMin = quote(entry.vehicle.kind, entry.service, entry.addons, entry.zone).durationMin;
     for (let t = window.start; t < window.end; t += GRID_MIN * MIN) {
       if (localMinutes(t) % GRID_MIN !== 0) continue;
-      if (isRainRisk(state, t, entry.parking)) break;
+      if (isRainRisk(state, t, entry.parking, entry.addons)) break;
       if (validate(state, { startMs: t, durationMin, zone: entry.zone }, nowMs) === null) return { entry, startMs: t };
     }
   }

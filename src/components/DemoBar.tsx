@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { CloudLightning, FastForward, Moon, RotateCcw, SunMedium, FlaskConical, UserX, X } from "lucide-react";
+import { Clock4, CloudLightning, FastForward, Moon, RotateCcw, SunMedium, FlaskConical, UserX, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { useNow } from "@/hooks/useNow";
@@ -77,6 +77,15 @@ export function DemoBar() {
           else toast("Nothing far enough ahead to cancel for free.", { description: "Reset the demo for a fresh week." });
         }}>
           <UserX /> A customer cancels
+        </Button>
+        <Button variant="outline" size="sm" className="border-background/30 bg-transparent text-background hover:bg-background/10 hover:text-background" onClick={() => {
+          done();
+          try {
+            const r = actions.demoRunningBehind(20);
+            toast.success(`${r.notified.length} ${r.notified.length === 1 ? "customer" : "customers"} told: running 20 min behind`, { description: `${r.jumped ? "Jumped to the next job morning first. " : ""}Each got a text with a new arrival, and their live map moved.` });
+          } catch { toast("No jobs left to be late for.", { description: "Reset the demo for a fresh week." }); }
+        }}>
+          <Clock4 /> Dario runs 20 min behind
         </Button>
         <div className="grid grid-cols-2 gap-2">
           <Button variant="outline" size="sm" className="border-background/30 bg-transparent text-background hover:bg-background/10 hover:text-background" onClick={() => { done(); actions.clearStorm(); toast("Forecast cleared"); }}>

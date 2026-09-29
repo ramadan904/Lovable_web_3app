@@ -121,7 +121,7 @@ export function suggestDetailed(state: State, p: ParsedInquiry, nowMs: number, d
       const m = localMinutes(ms);
       if (p.part === "morning" && m >= 12 * 60) return false;
       if (p.part === "afternoon" && m < 12 * 60) return false;
-      return !(outdoor && isRainRisk(state, ms, "driveway"));
+      return !(outdoor && isRainRisk(state, ms, "driveway", p.addons));
     });
     // Prefer the slot that earns a neighbour deal: cheaper for them, less driving for Dario.
     const withDeal = slots.find((ms) => neighbourDeal(state, { startMs: ms, durationMin, zone }));

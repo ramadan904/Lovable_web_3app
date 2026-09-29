@@ -125,13 +125,15 @@ export default function Owner() {
             sub={`earned across ${ledger.jobsDone} finished jobs · $${Math.round(ledger.aheadCents / 100).toLocaleString()} booked over the next 7 days (${ledger.aheadJobs} jobs)`} />
         </dl>
 
-        <dl className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-3">
+        <dl className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
           <Tile icon={<CheckCircle2 className="size-5" />} value={String(ledger.bookings)} label="bookings taken with no back-and-forth" />
           <Tile icon={<Repeat className="size-5" />} value={String(ledger.rainMoves + ledger.moves)} label={`reschedules handled (${ledger.rainMoves} for rain, ${ledger.moves} by customers)`} />
           <Tile icon={<Clock className="size-5" />} value={String(ledger.inquiries)} label="inquiries answered in seconds" />
           <Tile icon={<CheckCircle2 className="size-5" />} value={String(ledger.confirmed)} label="one-tap confirmations collected" />
           <Tile icon={<Route className="size-5" />} value={hm(ledger.driveSavedMin)} label={`less driving from neighbour deals (customers saved $${Math.round(ledger.dealCents / 100)})`} />
           <Tile icon={<Send className="size-5" />} value={String(ledger.ownerReplies)} label="drafted replies you sent with one tap" />
+          <Tile icon={<Repeat className="size-5" />} value={String(ledger.onPlan)} label={`regulars on a care plan · ${ledger.repeatBooked} repeat ${ledger.repeatBooked === 1 ? "visit" : "visits"} booked this week ($${Math.round(ledger.repeatCents / 100)})`} />
+          <Tile icon={<Clock className="size-5" />} value={String(ledger.delaysReported)} label="times one tap told everyone you were running late" />
         </dl>
       </section>
 

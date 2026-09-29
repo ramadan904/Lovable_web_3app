@@ -11,6 +11,8 @@ export const MINUTES_SAVED = {
   rain: 12, // checking the forecast, texting, finding a dry slot
   backfill: 15, // working through a waitlist to fill a cancellation
   inquiry: 6, // answering "can you do my car, and when?"
+  plan: 10, // remembering a regular is due, finding them a slot, and texting them
+  delay: 6, // one "running late" text per customer still to come
 } as const;
 
 export interface Ledger {
@@ -35,6 +37,12 @@ export interface Ledger {
   /** Confirmed jobs in the next 7 days, already booked. */
   aheadCents: number;
   aheadJobs: number;
+  /** Care plans: customers on one, and visits booked for them automatically this week. */
+  onPlan: number;
+  repeatBooked: number;
+  repeatCents: number;
+  /** Times Dario told everyone he was running behind, and customers warned. */
+  delaysReported: number;
 }
 
 export function ledgerFor(state: State, nowMs: number, days = 7): Ledger {
@@ -61,9 +69,19 @@ export function ledgerFor(state: State, nowMs: number, days = 7): Ledger {
     recoveredCents: 0,
     aheadCents: 0,
     aheadJobs: 0,
+    onPlan: 0,
+    repeatBooked: 0,
+    repeatCents: 0,
+    delaysReported: count("delay"),
   };
+  const planCustomers = new Set<string>();
   for (const j of state.jobs) {
     if (j.source === "waitlist" && j.createdAt >= since && j.createdAt <= nowMs && j.status !== "cancelled" && j.status !== "released") l.recoveredCents += j.totalCents;
+    if (j.plan && j.status !== "cancelled" && j.status !== "released") planCustomers.add(j.customer.phone);
+    if (j.source === "plan" && j.createdAt >= since && j.createdAt <= nowMs && j.status !== "cancelled") {
+      l.repeatBooked += 1;
+      l.repeatCents += j.totalCents;
+    }
     if ((j.status === "booked" || j.status === "confirmed") && j.startMs > nowMs && j.startMs <= nowMs + days * DAY) {
       l.aheadCents += j.totalCents;
       l.aheadJobs += 1;
@@ -75,9 +93,11 @@ export function ledgerFor(state: State, nowMs: number, days = 7): Ledger {
       l.dealCents += j.discountCents;
     }
   }
+  l.onPlan = planCustomers.size;
+  const delayTexts = state.messages.filter((m) => m.kind === "delay" && m.at >= since && m.at <= nowMs).length;
   l.minutes =
     l.messages * MINUTES_SAVED.message + l.bookings * MINUTES_SAVED.booking + l.moves * MINUTES_SAVED.move +
     l.rainMoves * MINUTES_SAVED.rain + l.backfilled * MINUTES_SAVED.backfill + l.inquiries * MINUTES_SAVED.inquiry +
-    l.ownerReplies * MINUTES_SAVED.draft;
+    l.ownerReplies * MINUTES_SAVED.draft + l.repeatBooked * MINUTES_SAVED.plan + delayTexts * MINUTES_SAVED.delay;
   return l;
 }

@@ -4,7 +4,7 @@ import { expectBooked, trackErrors } from "./helpers";
 /** Book a Full Refresh for an SUV in a garage (so weather never interferes). */
 const TIME = /^\d{1,2}:\d{2} [AP]M$/;
 /** Days that have open times, in the picker's order. */
-const dayButtons = (page: Page) => page.locator("fieldset button[aria-pressed]:not([disabled])").filter({ hasText: /times/ });
+const dayButtons = (page: Page) => page.locator("fieldset button[aria-pressed]:not([disabled])").filter({ hasText: /\d times?/ });
 
 async function bookThroughUi(page: Page, name = "Test Driver", dayIndex = 0) {
   await page.goto("/book");
@@ -430,4 +430,83 @@ test("the app changes colour with the weather: a storm turns it to the rain pale
   // The pearl sheen is there in both moods: one gradient headline word on the landing page.
   await page.goto("/");
   await expect(page.locator(".iris-text").first()).toBeVisible();
+});
+
+test.describe("Running behind", () => {
+  test("one tap on Today's run texts every customer still to come, and the day's arrivals shift", async ({ page }) => {
+    await page.goto("/owner");
+    await demo(page, /Next job morning/);
+    const run = page.getByRole("region", { name: /Today's run|Run for/ });
+    const group = run.getByRole("group", { name: "Running behind" });
+    await expect(group).toBeVisible();
+    await group.getByRole("button", { name: "+20 min" }).click();
+    await expect(page.getByText(/told: running 20 min behind/)).toBeVisible();
+    await expect(group).toContainText("Running about 20 min behind");
+    await page.getByRole("tab", { name: /Messages sent/ }).click();
+    await expect(page.getByText("Running late").first()).toBeVisible();
+    await expect(page.getByText(/running about 20 min behind today/).first()).toBeVisible();
+  });
+
+  test("the customer sees the new arrival on their booking page, and their live ETA shifts", async ({ page }) => {
+    await page.goto("/owner");
+    await demo(page, /Dario runs 20 min behind/);
+    await expect(page.getByText(/told: running 20 min behind/)).toBeVisible();
+    const code = await page.evaluate(() => {
+      const s = JSON.parse(localStorage.getItem("fernhill:demo:v4")!);
+      return s.jobs.find((j: { delayMin: number; status: string }) => j.delayMin > 0 && ["booked", "confirmed"].includes(j.status)).code as string;
+    });
+    await page.goto(`/b/${code}`);
+    const notice = page.getByRole("status", { name: "Running late" });
+    await expect(notice).toContainText(/running about 20 min behind today/);
+    await expect(notice).toContainText(/around/);
+  });
+});
+
+test.describe("Care plans", () => {
+  test("choosing a plan at booking shows it in the review and gives the customer a plan card they can end", async ({ page }) => {
+    await page.goto("/book?v=sedan&s=express&zip=97212&p=garage");
+    await page.getByLabel("Street address").fill("1 Plan St");
+    await page.getByRole("button", { name: /Continue/ }).click();
+    await dayButtons(page).nth(1).click();
+    await page.locator("fieldset button[aria-pressed]").filter({ hasText: TIME }).first().click();
+    await page.getByRole("button", { name: /Continue/ }).click();
+    await page.getByRole("radio", { name: /Every 6 weeks/ }).check({ force: true });
+    const review = page.getByRole("region", { name: "Review your booking" });
+    await expect(review.getByText("Care plan", { exact: true })).toBeVisible();
+    await expect(review).toContainText(/Every 6 weeks/);
+    await page.getByLabel("Your name").fill("Plan Priya");
+    await page.getByLabel("Mobile number").fill("(503) 555-0100");
+    await page.getByLabel("Email").fill("priya@example.com");
+    await page.getByRole("button", { name: /Book it/ }).click();
+    await expectBooked(page);
+    await expect(page.getByRole("region", { name: "What happens next" })).toContainText("Care plan");
+    await expect(page.getByRole("heading", { name: /Your care plan: every 6 weeks/ })).toBeVisible();
+    await page.getByRole("button", { name: "End my plan" }).click();
+    await expect(page.getByRole("heading", { name: /Your care plan/ })).toHaveCount(0);
+  });
+
+  test("the owner sees regulars on a plan and repeat visits booked for them", async ({ page }) => {
+    await page.goto("/owner");
+    const panel = page.getByRole("region", { name: "Handled for you this week" });
+    await expect(panel).toContainText(/regulars on a care plan/);
+    await expect(panel).toContainText(/repeat visits? booked this week/);
+  });
+});
+
+test.describe("Ceramic sealant needs a dry day to cure", () => {
+  test("outdoors, the calendar explains it and greys out wet days; in a garage there's no restriction", async ({ page }) => {
+    await page.goto("/book?v=sedan&s=express&a=sealant&zip=97212&p=driveway");
+    await page.getByLabel("Street address").fill("1 Cure St");
+    await page.getByRole("button", { name: /Continue/ }).click();
+    await expect(page.getByText(/needs about four dry hours to cure/)).toBeVisible();
+    const wet = page.locator("fieldset button[aria-pressed][disabled]").filter({ hasText: /Needs dry/ });
+    test.skip((await wet.count()) === 0, "no 40%+ rain day in this three-week window");
+    await expect(wet.first()).toBeDisabled();
+
+    await page.goto("/book?v=sedan&s=express&a=sealant&zip=97212&p=garage");
+    await page.getByLabel("Street address").fill("1 Cure St");
+    await page.getByRole("button", { name: /Continue/ }).click();
+    await expect(page.getByText(/needs about four dry hours to cure/)).toHaveCount(0);
+    await expect(page.locator("fieldset button[aria-pressed][disabled]").filter({ hasText: /Needs dry/ })).toHaveCount(0);
+  });
 });

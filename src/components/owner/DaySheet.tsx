@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { WeatherChip } from "../Weather";
 import { Tracker } from "../Tracker";
 import { JobCard } from "./JobCard";
+import { withDelay } from "@/lib/tracker";
 import { RunStrip } from "./RunStrip";
 
 const clock = (date: string, min: number) => fmtTime(atLocal(date, min));
@@ -16,7 +17,7 @@ const clock = (date: string, min: number) => fmtTime(atLocal(date, min));
 export function DaySheet({ state, date, now }: { state: State; date: string; now: number }) {
   const jobs = state.jobs.filter((j) => localDate(j.startMs) === date && ["booked", "confirmed", "completed"].includes(j.status)).sort((a, b) => a.startMs - b.startMs);
   const f = forecastFor(date, state.stormDays);
-  const blocks = routeBlocks(jobs);
+  const blocks = routeBlocks(withDelay(jobs));
   const closed = !OPEN_WEEKDAYS.includes(weekdayOf(date));
   const revenue = jobs.reduce((n, j) => n + j.totalCents, 0);
 
@@ -28,7 +29,7 @@ export function DaySheet({ state, date, now }: { state: State; date: string; now
         <span className="text-sm text-muted-foreground">{jobs.length} {jobs.length === 1 ? "job" : "jobs"} · ${Math.round(revenue / 100).toLocaleString()}</span>
       </div>
 
-      {jobs.length > 0 && <RunStrip jobs={jobs} date={date} title={date === localDate(now) ? "Today's run" : `Run for ${fmtDate(date, "EEEE")}`} />}
+      {jobs.length > 0 && <RunStrip now={now} jobs={jobs} date={date} title={date === localDate(now) ? "Today's run" : `Run for ${fmtDate(date, "EEEE")}`} />}
 
       {jobs.length > 0 && <Tracker state={state} date={date} now={now} />}
 

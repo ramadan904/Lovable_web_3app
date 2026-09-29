@@ -1,21 +1,40 @@
-import { Droplets, Home, Truck } from "lucide-react";
+import { Clock4, Droplets, Home, Truck } from "lucide-react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
 import { DAY_END_MIN, DAY_START_MIN, ZONES } from "@/lib/business";
 import { routeBlocks } from "@/lib/engine";
 import type { Job } from "@/lib/model";
-import { atLocal, fmtTime } from "@/lib/time";
+import { BookingError } from "@/lib/model";
+import { actions } from "@/lib/store";
+import { withDelay } from "@/lib/tracker";
+import { atLocal, fmtTime, localDate } from "@/lib/time";
 import { cn } from "@/lib/utils";
 
 const first = (n: string) => n.split(/\s+/)[0];
 
 /** The day in one glance: jobs, the drives between them (already calculated), and when he's home. */
-export function RunStrip({ jobs, date, title }: { jobs: Job[]; date: string; title: string }) {
-  const sorted = [...jobs].sort((a, b) => a.startMs - b.startMs);
+export function RunStrip({ jobs, date, title, now }: { jobs: Job[]; date: string; title: string; now: number }) {
+  const sorted = withDelay([...jobs].sort((a, b) => a.startMs - b.startMs));
   const blocks = routeBlocks(sorted);
   if (!sorted.length) return null;
   const span = DAY_END_MIN - DAY_START_MIN;
   const driving = blocks.filter((b) => b.kind === "drive" || b.kind === "home").reduce((n, b) => n + (b.endMin - b.startMin), 0);
   const at = (m: number) => fmtTime(atLocal(date, m));
   const home = blocks[blocks.length - 1].endMin;
+  const late = Math.max(...sorted.map((j) => j.delayMin ?? 0));
+  const notStarted = sorted.filter((j) => j.startMs > now);
+  const canWarn = date === localDate(now) && notStarted.length > 0;
+  const warn = (minutes: number) => {
+    try {
+      const told = actions.runningBehind(minutes);
+      toast.success(`${told.length} ${told.length === 1 ? "customer" : "customers"} told: running ${minutes} min behind`, {
+        description: `${told.join(", ")} got a text with their new arrival, and their live map moved.`,
+      });
+    } catch (e) {
+      if (e instanceof BookingError) toast.error(e.message);
+      else throw e;
+    }
+  };
 
   return (
     <section aria-label={title} className="card p-5">
@@ -36,6 +55,21 @@ export function RunStrip({ jobs, date, title }: { jobs: Job[]; date: string; tit
         ))}
       </div>
       <div className="mt-1 flex justify-between text-[0.7rem] font-medium text-muted-foreground" aria-hidden="true"><span>8 am</span><span>12 pm</span><span>5:30 pm</span></div>
+
+      {(canWarn || late > 0) && (
+        <div className="mt-4 rounded-md border border-sun/50 bg-sun-soft p-3 text-sun-ink" role="group" aria-label="Running behind">
+          <p className="flex flex-wrap items-center gap-2 text-sm font-bold">
+            <Clock4 className="size-4" aria-hidden="true" />
+            {late > 0 ? `Running about ${late} min behind. Customers still to come were told their new arrival.` : "Running behind? One tap tells everyone still to come today."}
+          </p>
+          {canWarn && (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {[10, 20, 30].map((m) => <Button key={m} size="sm" variant="outline" onClick={() => warn(m)}>+{m} min</Button>)}
+              <span className="self-center text-xs">Each customer gets a text with a recalculated arrival, and their live map shifts.</span>
+            </div>
+          )}
+        </div>
+      )}
 
       <ol className="mt-4 flex flex-col gap-2 md:flex-row md:flex-wrap md:items-stretch" aria-label="Stops and drives in order">
         {blocks.map((b, i) => {

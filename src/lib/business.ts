@@ -47,6 +47,13 @@ export const RAIN_AUTO_H = 6;
 export const CONFIRM_NUDGE_H = 6;
 export const RELEASE_H = 3;
 export const WAITLIST_OFFER_H = 2;
+/** Ceramic spray sealant needs about four dry hours to cure. Outdoors, that means a dry day. */
+export const CURE_RAIN_LIMIT = 40;
+/** Repeat customers ("care plans"): how often, and the saving on every visit after the first. */
+export const PLAN_WEEKS = [4, 6, 8] as const;
+export const PLAN_DISCOUNT = 0.1;
+/** The longest delay Dario can report in one go; beyond this he should call people. */
+export const MAX_DELAY_MIN = 120;
 
 // Zones -----------------------------------------------------------------------
 export interface Zone {
@@ -151,7 +158,7 @@ export const ADDONS: Record<AddonKey, Addon> = {
   pet: { key: "pet", name: "Pet hair removal", line: "Rubber-brush and vacuum pass on every fabric surface", min: 30, cents: 3500 },
   mud: { key: "mud", name: "Heavy mud or road salt", line: "Underbody and wheel-well rinse", min: 30, cents: 3000 },
   headlights: { key: "headlights", name: "Headlight restoration", line: "Cloudy lenses, wet-sanded and sealed", min: 30, cents: 4500 },
-  sealant: { key: "sealant", name: "Ceramic spray sealant", line: "Months of water beading. Good for Portland", min: 20, cents: 4000 },
+  sealant: { key: "sealant", name: "Ceramic spray sealant", line: "Months of water beading. Outdoors it needs a dry day to cure", min: 20, cents: 4000 },
   odor: { key: "odor", name: "Odor treatment", line: "Ozone and steam for smoke, pets or gym bags", min: 20, cents: 3000 },
 };
 
@@ -162,6 +169,11 @@ export const PARKING: Record<Parking, { name: string; line: string; covered: boo
   street: { name: "Street", line: "Outdoors. We'll watch the forecast for you", covered: false },
 };
 export const isCovered = (p: Parking) => PARKING[p].covered;
+
+/** Sealant cures for about four hours: outdoors, only a dry day will do. */
+export const needsDryDay = (addons: readonly AddonKey[] | undefined, parking: Parking) => !isCovered(parking) && !!addons?.includes("sealant");
+/** How much rain chance moves a job: 70% normally, 40% when it has sealant to cure outdoors. */
+export const rainLimitFor = (addons: readonly AddonKey[] | undefined, parking: Parking) => (needsDryDay(addons, parking) ? CURE_RAIN_LIMIT : RAIN_LIMIT);
 
 export const roundUp15 = (m: number) => Math.ceil(m / 15) * 15;
 const roundTo5 = (cents: number) => Math.round(cents / 500) * 500;

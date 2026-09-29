@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import { CalendarPlus, Check, CheckCircle2, CloudRain, Copy, MapPin, MessageSquare, Umbrella } from "lucide-react";
+import { CalendarPlus, Check, CheckCircle2, Clock4, CloudRain, Copy, MapPin, MessageSquare, Repeat, Umbrella } from "lucide-react";
 import { toast } from "sonner";
 import { PhoneThread } from "@/components/PhoneThread";
 import { SlotPicker } from "@/components/SlotPicker";
@@ -11,7 +11,7 @@ import { Input, Textarea } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useNow } from "@/hooks/useNow";
 import { timelineFor } from "@/lib/automations";
-import { ADDONS, BUSINESS, FREE_CHANGE_H, PARKING, RAIN_CHECK_H, SERVICES, ZONES, dollars, hoursLabel, isCovered } from "@/lib/business";
+import { ADDONS, BUSINESS, FREE_CHANGE_H, PARKING, PLAN_DISCOUNT, RAIN_CHECK_H, SERVICES, ZONES, dollars, hoursLabel, isCovered, needsDryDay } from "@/lib/business";
 import { CAN_DOWNLOAD, downloadIcs } from "@/lib/ics";
 import { dryOptions } from "@/lib/engine";
 import { ACTIVE, BookingError } from "@/lib/model";
@@ -80,6 +80,7 @@ export default function Manage() {
       ? { title: "One-tap confirm", text: `${fmtStamp(at("reminder")!.at)}: tap Confirm and you're set`, done: at("reminder")!.state === "sent" }
       : { title: "One-tap confirm", text: "isn't needed: you booked inside 24 hours, so you're already confirmed", done: true },
     { title: "On-the-way text", text: `${fmtStamp(job.startMs - 30 * MIN)}: with a live map of Bertha`, done: at("omw")?.state === "sent" },
+    ...(job.plan ? [{ title: "Care plan", text: `once this visit is done, your next one (every ${job.plan.everyWeeks} weeks) is booked automatically, 10% off, no deposit`, done: false }] : []),
     { title: "Rain watch", text: covered ? "Your car is covered, so weather never moves you." : `${RAIN_CHECK_H} hours before, if heavy rain is forecast, you're offered dry times and moved free.`, done: false },
   ];
   const openChange = (mode: "move" | "cancel") => {
@@ -172,6 +173,15 @@ export default function Manage() {
         </section>
       )}
 
+      {active && job.delayMin > 0 && (
+        <section role="status" aria-label="Running late" className="mb-6 flex gap-3 rounded-lg border border-sun/50 bg-sun-soft p-4 text-sun-ink">
+          <Clock4 className="mt-0.5 size-5 shrink-0" aria-hidden="true" />
+          <div>
+            <p className="font-bold">{BUSINESS.van} is running about {job.delayMin} min behind today</p>
+            <p className="text-sm">{BUSINESS.ownerFirst} will get to you around <strong>{fmtTime(job.startMs + job.delayMin * MIN)}</strong> instead of {fmtTime(job.startMs)}. Nothing to do: you'll get a text when he's on the way, and the map below shows him live.</p>
+          </div>
+        </section>
+      )}
       {active && !job.rainOffer && (
         <WeatherStatus
           className="mb-6"
@@ -191,12 +201,25 @@ export default function Manage() {
               <div><dt className="eyebrow">Where</dt><dd className="flex items-start gap-1.5 font-semibold"><MapPin className="mt-0.5 size-4 shrink-0" aria-hidden="true" />{job.address} ({ZONES[job.zone].name})</dd></div>
               <div><dt className="eyebrow">Parking</dt><dd className="flex items-start gap-1.5 font-semibold">{covered ? <Umbrella className="mt-0.5 size-4 shrink-0 text-fern" aria-hidden="true" /> : <CloudRain className="mt-0.5 size-4 shrink-0 text-rain" aria-hidden="true" />}{PARKING[job.parking].name}</dd></div>
               <div><dt className="eyebrow">Includes</dt><dd>{[SERVICES[job.service].name, ...job.addons.map((a) => ADDONS[a].name)].join(", ")}</dd></div>
-              <div><dt className="eyebrow">Total</dt><dd className="font-semibold">{dollars(job.totalCents)} {job.discountCents > 0 && <span className="chip ml-1 border-sun/50 bg-sun-soft text-sun-ink">−{dollars(job.discountCents)} neighbour deal</span>} <span className="font-normal text-muted-foreground">({dollars(job.depositCents)} deposit {job.depositState === "refunded" ? "refunded" : job.depositState === "kept" ? "kept" : job.depositState === "applied" ? "applied" : "paid"})</span></dd></div>
+              <div><dt className="eyebrow">Total</dt><dd className="font-semibold">{dollars(job.totalCents)} {job.discountCents > 0 && <span className="chip ml-1 border-sun/50 bg-sun-soft text-sun-ink">−{dollars(job.discountCents)} neighbour deal</span>} <span className="font-normal text-muted-foreground">({job.depositCents === 0 ? "care plan: no deposit" : `${dollars(job.depositCents)} deposit ${job.depositState === "refunded" ? "refunded" : job.depositState === "kept" ? "kept" : job.depositState === "applied" ? "applied" : "paid"}`})</span></dd></div>
             </dl>
             {active && CAN_DOWNLOAD && <Button variant="outline" size="sm" className="mt-5" onClick={() => downloadIcs(job)}><CalendarPlus /> Add to calendar</Button>}
           </section>
 
           {active && <Tracker state={state} date={localDate(job.startMs)} now={now} focusJobId={job.id} />}
+
+          {active && job.plan && (
+            <section className="card p-5 md:p-6" aria-labelledby="plan-h">
+              <h2 id="plan-h" className="flex items-center gap-2 text-xl font-bold"><Repeat className="size-5 text-fern" aria-hidden="true" /> Your care plan: every {job.plan.everyWeeks} weeks</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {Math.round(PLAN_DISCOUNT * 100)}% off every visit, and no deposit after the first. When each visit is done, the next one is booked for you automatically: the same weekday and time if it's free, otherwise the nearest slot. {job.source === "plan" ? "This visit was booked for you automatically." : "The next visit will be booked when this one is done."}
+              </p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {job.source === "plan" && free && <Button variant="outline" onClick={() => guard(() => actions.skipPlanVisit(job.id), "Skipped. Your plan carries on from the next visit.")}>Skip this visit</Button>}
+                <Button variant="ghost" onClick={() => guard(() => actions.endCarePlan(job.id), "Plan ended. This visit stays; no more are booked after it.")}>End my plan</Button>
+              </div>
+            </section>
+          )}
 
           {active && <AccessCard key={job.id} id={job.id} gate={job.access.gateCode} notes={job.access.notes} />}
 
@@ -230,7 +253,7 @@ export default function Manage() {
               )}
               {moving && (
                 <div className="mt-5 space-y-5">
-                  <SlotPicker durationMin={job.durationMin} zone={job.zone} parking={job.parking} now={now} value={target} onChange={setTarget} excludeJobId={job.id} />
+                  <SlotPicker durationMin={job.durationMin} zone={job.zone} parking={job.parking} now={now} value={target} onChange={setTarget} excludeJobId={job.id} needsDry={needsDryDay(job.addons, job.parking)} />
                   <div className="flex gap-2">
                     <Button disabled={!target} onClick={() => guard(() => { actions.move(job.id, target!); setMoving(false); setTarget(null); }, "Moved. Your reminders moved too.")}>
                       {target ? `Move to ${fmtDayLong(target)}, ${fmtTime(target)}` : "Pick a new time"}

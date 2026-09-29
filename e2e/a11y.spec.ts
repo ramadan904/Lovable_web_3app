@@ -116,7 +116,7 @@ test.describe("rain mode (the weather-reactive palette)", () => {
     await page.goto("/book?v=sedan&s=express&zip=97212&p=driveway");
     await page.getByLabel("Street address").fill("1 Main");
     await page.getByRole("button", { name: /Continue/ }).click();
-    await page.locator("fieldset button[aria-pressed]:not([disabled])").filter({ hasText: /times/ }).nth(1).click();
+    await page.locator("fieldset button[aria-pressed]:not([disabled])").filter({ hasText: /\d times?/ }).nth(1).click();
     await page.locator("fieldset button[aria-pressed]").filter({ hasText: /^\d{1,2}:\d{2} [AP]M$/ }).first().click();
     await page.getByRole("button", { name: /Continue/ }).click();
     await audit(page);
@@ -127,4 +127,12 @@ test.describe("rain mode (the weather-reactive palette)", () => {
     await expectBooked(page);
     await audit(page);
   });
+});
+
+test("owner with the running-late banner and care plan tiles", async ({ page }) => {
+  await page.goto("/owner");
+  await page.getByRole("button", { name: "Open demo controls" }).click();
+  await page.getByRole("button", { name: /Dario runs 20 min behind/ }).click();
+  await expect(page.getByText(/Running about 20 min behind/).first()).toBeVisible();
+  await audit(page);
 });

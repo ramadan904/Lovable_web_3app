@@ -43,7 +43,11 @@ export interface Job {
   ownerFlag: string | null;
   /** True once rain has touched this booking (offered or moved): it can then be cancelled for a full refund. */
   rainAffected: boolean;
-  source: "web" | "inquiry" | "waitlist";
+  /** Minutes Bertha is running behind on the day: shifts the arrival and everything after it, never the booked slot. */
+  delayMin: number;
+  /** A repeat customer: after each visit the next one is booked automatically. */
+  plan: { everyWeeks: number } | null;
+  source: "web" | "inquiry" | "waitlist" | "plan";
   /** Demo only: seeded customers reply "C" on their own. */
   simReplies: boolean;
 }
@@ -51,7 +55,7 @@ export interface Job {
 export type MessageKind =
   | "confirmation" | "prep" | "reminder" | "confirm_reply" | "nudge" | "released"
   | "rain_offer" | "rain_moved" | "moved" | "cancelled" | "waitlist_offer"
-  | "omw" | "aftercare" | "inquiry_reply" | "inquiry_in" | "owner_reply";
+  | "omw" | "aftercare" | "inquiry_reply" | "inquiry_in" | "owner_reply" | "delay" | "plan_booked";
 
 export interface Message {
   id: string;
@@ -68,7 +72,7 @@ export interface Message {
 
 export type EventKind =
   | "booked" | "confirmed" | "moved" | "rain_moved" | "cancelled" | "released"
-  | "backfilled" | "completed" | "inquiry" | "waitlist_joined" | "owner_reply";
+  | "backfilled" | "completed" | "inquiry" | "waitlist_joined" | "owner_reply" | "delay" | "plan_booked";
 
 export interface ActivityEvent {
   id: string;
@@ -125,7 +129,7 @@ export interface State {
 }
 
 export class BookingError extends Error {
-  code: "slot_taken" | "closed" | "day_full" | "too_soon" | "too_far" | "outside_area" | "invalid" | "not_found" | "too_late" | "not_open";
+  code: "slot_taken" | "closed" | "day_full" | "too_soon" | "too_far" | "outside_area" | "invalid" | "not_found" | "too_late" | "not_open" | "needs_dry";
   constructor(code: BookingError["code"], message: string) {
     super(message);
     this.code = code;

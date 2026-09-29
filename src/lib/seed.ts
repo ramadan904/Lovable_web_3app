@@ -26,6 +26,8 @@ interface Spec {
   sim?: boolean;
   /** Apply the neighbour-deal rule as it would have applied at booking. */
   deal?: boolean;
+  /** On a care plan: repeat every this many weeks. */
+  plan?: number;
 }
 
 const mins = (hhmm: string) => {
@@ -47,14 +49,14 @@ const FUTURE: Spec[] = [
   { day: 3, at: "9:30", name: "Marcus Webb", phone: "(503) 555-0189", vehicle: ["van", "white Ford Transit"], service: "full", address: "12810 SW Canyon Rd, Beaverton", zip: "97005", parking: "driveway", gate: "Gate 1880", notes: "Business van. Gate code after 8 am.", sim: false },
   { day: 3, at: "14:00", name: "Hannah Frost", phone: "(503) 555-0195", vehicle: ["sedan", "green Mini Cooper"], service: "interior", addons: ["odor"], address: "4433 NE Alberta St", zip: "97211", parking: "street", notes: "Spilled a smoothie two weeks ago.", sim: true },
   // Day 4
-  { day: 4, at: "10:00", name: "Owen Park", phone: "(503) 555-0201", vehicle: ["suv", "black Tesla Model Y"], service: "full", address: "7730 N Willamette Blvd", zip: "97203", parking: "garage", gate: "#0915", sim: true },
+  { day: 4, at: "10:00", name: "Owen Park", phone: "(503) 555-0201", vehicle: ["suv", "black Tesla Model Y"], service: "full", address: "7730 N Willamette Blvd", zip: "97203", parking: "garage", gate: "#0915", sim: true, plan: 4 },
 ];
 
 /** Which of the coming open days each template lands on. */
 const SLOT_IDX = [0, 1, 3, 4, 6];
 
 const PAST: Spec[] = [
-  { day: -1, at: "9:00", name: "Tessa Molina", phone: "(503) 555-0212", vehicle: ["sedan", "yellow VW Golf"], service: "full", address: "5011 SE Hawthorne Blvd", zip: "97215", parking: "driveway", sim: true },
+  { day: -1, at: "9:00", name: "Tessa Molina", phone: "(503) 555-0212", vehicle: ["sedan", "yellow VW Golf"], service: "full", address: "5011 SE Hawthorne Blvd", zip: "97215", parking: "driveway", sim: true, plan: 6 },
   { day: -2, at: "10:00", name: "Andre Silva", phone: "(503) 555-0226", vehicle: ["truck", "grey Ford F-150"], service: "full", addons: ["mud"], address: "9012 N Lombard St", zip: "97203", parking: "driveway", sim: true },
   { day: -2, at: "14:30", name: "Priya Nair", phone: "(503) 555-0238", vehicle: ["suv", "silver Honda CR-V"], service: "interior", address: "1810 NE Fremont St", zip: "97212", parking: "garage", sim: true },
   { day: -3, at: "9:30", name: "Cole Bennett", phone: "(503) 555-0244", vehicle: ["sedan", "blue Subaru WRX"], service: "express", address: "3921 SE Division St", zip: "97202", parking: "street", sim: true },
@@ -90,7 +92,7 @@ function addSeedJob(s: State, spec: Spec, date: string, createdAt: number): Job 
     vehicle: { kind: spec.vehicle[0], label: spec.vehicle[1] }, service: spec.service, addons, zip: spec.zip, zone,
     address: spec.address, parking: spec.parking, access: { gateCode: spec.gate ?? "", notes: spec.notes ?? "" },
     startMs: atLocal(date, mins(spec.at)), durationMin: q.durationMin, totalCents: q.totalCents, discountCents: 0, dealMin: 0, depositCents: 2500, depositState: "held",
-    movedFrom: [], confirmedAt: null, closedAt: null, closedReason: null, rainOffer: null, ownerFlag: null, rainAffected: false,
+    movedFrom: [], confirmedAt: null, closedAt: null, closedReason: null, rainOffer: null, ownerFlag: null, rainAffected: false, delayMin: 0, plan: spec.plan ? { everyWeeks: spec.plan } : null,
     source: "web", simReplies: spec.sim ?? false,
   };
   s.jobs.push(job);

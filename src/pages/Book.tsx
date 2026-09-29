@@ -9,7 +9,7 @@ import { Input, Textarea } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useNow } from "@/hooks/useNow";
 import {
-  ADDONS, DEPOSIT_CENTS, PARKING, SERVICES, VEHICLES, ZONES, dollars, hoursLabel, isCovered, quote, zoneForZip,
+  ADDONS, DEPOSIT_CENTS, PARKING, PLAN_DISCOUNT, PLAN_WEEKS, SERVICES, VEHICLES, ZONES, dollars, hoursLabel, isCovered, needsDryDay, quote, zoneForZip,
   type AddonKey, type Parking, type ServiceKey, type VehicleKind,
 } from "@/lib/business";
 import { BookingError } from "@/lib/model";
@@ -31,6 +31,8 @@ interface Form {
   gateCode: string;
   notes: string;
   startMs: number | null;
+  /** Care plan: repeat every this many weeks, or none. */
+  plan: number | null;
   name: string;
   phone: string;
   email: string;
@@ -46,7 +48,7 @@ function initialForm(p: URLSearchParams): { form: Form; step: number } {
   const pk = p.get("p");
   const parking = pk && pk in PARKING ? (pk as Parking) : null;
   const t = Number(p.get("t")) || null;
-  const form: Form = { vehicle, label: "", service, addons, zip, address: "", parking, gateCode: "", notes: "", startMs: t, name: "", phone: "", email: "" };
+  const form: Form = { vehicle, label: "", service, addons, zip, address: "", parking, gateCode: "", notes: "", startMs: t, plan: null, name: "", phone: "", email: "" };
   const step = !vehicle || !service ? 0 : 1;
   return { form, step };
 }
@@ -136,7 +138,7 @@ export default function Book() {
           customer: { name: form.name, phone: form.phone, email: form.email },
           vehicle: { kind: form.vehicle!, label: form.label.trim() || VEHICLES[form.vehicle!].name.toLowerCase() },
           service: form.service!, addons: form.addons, zip: form.zip, address: form.address, parking: form.parking!,
-          access: { gateCode: form.gateCode, notes: form.notes }, startMs: form.startMs!,
+          access: { gateCode: form.gateCode, notes: form.notes }, startMs: form.startMs!, plan: form.plan,
         });
         nav(`/b/${job.code}?new=1`);
       } catch (err) {
@@ -295,7 +297,7 @@ export default function Book() {
           {step === 2 && q && zone && form.parking && (
             <div className="space-y-6">
               <SlotPicker
-                durationMin={q.durationMin} zone={zone} parking={form.parking} now={now} value={form.startMs} showDeals
+                durationMin={q.durationMin} zone={zone} parking={form.parking} now={now} value={form.startMs} showDeals needsDry={needsDryDay(form.addons, form.parking)}
                 onChange={(ms) => set("startMs", ms)}
                 whenEmpty={<WaitlistForm form={form} set={set} onSubmit={joinWaitlist} done={waitlisted} error={error} />}
               />
@@ -323,6 +325,21 @@ export default function Book() {
                 <Field id="phone" label="Mobile number" hint="For your reminders. Reply C to confirm, or tap the link."><Input id="phone" type="tel" autoComplete="tel" value={form.phone} onChange={(e) => set("phone", e.target.value)} placeholder="(503) 555-0100" aria-describedby="phone-hint" /></Field>
               </div>
               <Field id="email" label="Email"><Input id="email" type="email" autoComplete="email" value={form.email} onChange={(e) => set("email", e.target.value)} /></Field>
+
+              <fieldset className="rounded-lg border bg-card p-5">
+                <legend className="px-1 font-display text-lg font-bold">Keep it clean? <span className="text-sm font-medium text-muted-foreground">(optional)</span></legend>
+                <p className="mb-3 text-sm text-muted-foreground">
+                  Choose a care plan and we book your next visit for you after each one: the same weekday and time if it's free, otherwise the nearest slot. <strong className="text-foreground">{Math.round(PLAN_DISCOUNT * 100)}% off every visit after this one, no deposit after the first.</strong> Skip or stop any time.
+                </p>
+                <div className="grid gap-2 sm:grid-cols-4">
+                  {[null, ...PLAN_WEEKS].map((w) => (
+                    <RadioCard key={String(w)} name="plan" value={String(w)} checked={form.plan === w} onChange={() => set("plan", w)}>
+                      <span className="font-display text-base font-bold">{w === null ? "Just this once" : `Every ${w} weeks`}</span>
+                      <span className="text-xs text-muted-foreground">{w === null ? "No plan" : w === 6 ? "Most popular" : `${Math.round(PLAN_DISCOUNT * 100)}% off after`}</span>
+                    </RadioCard>
+                  ))}
+                </div>
+              </fieldset>
 
               <div className="card space-y-3 p-5">
                 <h3 className="flex items-center gap-2 text-lg font-bold"><LockKeyhole className="size-4 text-fern" aria-hidden="true" /> {dollars(DEPOSIT_CENTS)} holds the slot</h3>
@@ -374,6 +391,7 @@ function ReviewCard({ form, q, zone, onChangeTime }: { form: Form; q: ReturnType
     ["Vehicle", form.label ? <span className="capitalize">{form.label}</span> : VEHICLES[form.vehicle!].name],
     ["Where", <>{form.address}, {ZONES[zone].name}</>],
     ["Parking", <span className={covered ? "text-fern-ink" : "text-rain"}>{PARKING[form.parking!].name} · {covered ? "covered, not weather-sensitive" : "outdoors, weather-sensitive"}</span>],
+    ...(form.plan ? [["Care plan", <>Every {form.plan} weeks: the next visit is booked for you after each one, {Math.round(PLAN_DISCOUNT * 100)}% off, no deposit after this first visit</>] as [string, React.ReactNode]] : []),
     ["Time window", <><strong>{fmtDayLong(start)}</strong>, {fmtTime(start)} to about {fmtTime(end)} <span className="text-muted-foreground">({hoursLabel(q.durationMin)} on site)</span></>],
   ];
   return (

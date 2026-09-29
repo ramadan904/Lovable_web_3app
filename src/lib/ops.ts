@@ -1,13 +1,14 @@
 // State transitions. Every function takes a State and returns a new one; the UI
 // and the automations both go through here, so the rules are enforced once.
 import {
-  BUSINESS, DEPOSIT_CENTS, FREE_CHANGE_H, RAIN_AUTO_H, WAITLIST_OFFER_H, quote, zoneForZip,
+  BUSINESS, CURE_RAIN_LIMIT, DEPOSIT_CENTS, FREE_CHANGE_H, MAX_DELAY_MIN, PLAN_DISCOUNT, RAIN_AUTO_H, WAITLIST_OFFER_H, needsDryDay, quote, zoneForZip,
   type AddonKey, type Parking, type ServiceKey, type VehicleKind, type ZoneKey,
 } from "./business";
-import { backfillCandidate, dryOptions, neighbourDeal, validate } from "./engine";
+import { backfillCandidate, dryOptions, findSlots, neighbourDeal, validate } from "./engine";
 import { composeForJob, composeOffer } from "./messages";
 import { ACTIVE, BookingError, type ActivityEvent, type Job, type Message, type MessageKind, type State, type WaitlistEntry } from "./model";
-import { HOUR, fmtDay, fmtTime, localDate } from "./time";
+import { HOUR, MIN, addDays, fmtDay, fmtTime, localDate, localMinutes } from "./time";
+import { forecastFor } from "./weather";
 
 export interface BookingInput {
   customer: { name: string; phone: string; email: string };
@@ -21,6 +22,8 @@ export interface BookingInput {
   startMs: number;
   source?: Job["source"];
   simReplies?: boolean;
+  /** A care plan: repeat every this many weeks. */
+  plan?: number | null;
 }
 
 const clone = (s: State): State => structuredClone(s);
@@ -60,11 +63,12 @@ export function pushEvent(s: State, at: number, kind: ActivityEvent["kind"], job
 }
 
 const jobKey = (job: Job, kind: MessageKind, salt: string | number = job.startMs) => `${job.id}:${kind}:${salt}`;
+const REPEATABLE: MessageKind[] = ["rain_offer", "moved", "rain_moved", "delay"];
 
 export function sendForJob(s: State, job: Job, kind: MessageKind, at: number, extra?: Parameters<typeof composeForJob>[2]): void {
   const c = composeForJob(kind, job, extra);
   pushMessage(s, {
-    key: jobKey(job, kind, kind === "rain_offer" || kind === "moved" || kind === "rain_moved" ? `${job.startMs}:${at}` : job.startMs),
+    key: jobKey(job, kind, REPEATABLE.includes(kind) ? `${job.startMs}:${at}` : job.startMs),
     jobId: job.id, at, kind, channel: c.channel, direction: c.direction,
     to: c.direction === "in" ? BUSINESS.short : c.channel === "email" ? job.customer.email : job.customer.phone,
     body: c.body,
@@ -93,6 +97,9 @@ export function createJob(state: State, input: BookingInput, nowMs: number): { s
   if (!zone) throw new BookingError("outside_area", "We don't reach that zip code yet. Join the waitlist and we'll tell you when we do.");
   if (!input.customer.name.trim() || !input.customer.phone.trim() || !input.address.trim()) throw new BookingError("invalid", "Please fill in your name, phone and address.");
   const q = quote(input.vehicle.kind, input.service, input.addons, zone);
+  if (needsDryDay(input.addons, input.parking) && forecastFor(localDate(input.startMs), s.stormDays).rain >= CURE_RAIN_LIMIT) {
+    throw new BookingError("needs_dry", "Ceramic spray sealant needs a dry day to cure outdoors. Pick a drier day, or choose a covered spot.");
+  }
   const problem = validate(s, { startMs: input.startMs, durationMin: q.durationMin, zone }, nowMs);
   if (problem) throw problemToError(problem);
 
@@ -128,6 +135,8 @@ export function createJob(state: State, input: BookingInput, nowMs: number): { s
     rainOffer: null,
     ownerFlag: null,
     rainAffected: false,
+    delayMin: 0,
+    plan: input.plan ? { everyWeeks: input.plan } : null,
     source: input.source ?? "web",
     simReplies: input.simReplies ?? false,
   };
@@ -168,6 +177,7 @@ export function moveJob(state: State, id: string, newStartMs: number, nowMs: num
   job.startMs = newStartMs;
   job.rainOffer = null;
   job.ownerFlag = null;
+  job.delayMin = 0;
   const soon = newStartMs - nowMs < FREE_CHANGE_H * HOUR;
   job.status = soon ? "confirmed" : "booked";
   job.confirmedAt = soon ? nowMs : null;
@@ -299,6 +309,95 @@ export function sendOwnerReply(
     pushMessage(s, { key: `owner:${q.id}:${nowMs}`, at: nowMs, kind: "owner_reply", channel: "sms", direction: "out", to: q.from, body });
     pushEvent(s, nowMs, "owner_reply", null, `Dario replied to ${q.from}`);
   }
+  return s;
+}
+
+/** "Running behind": one tap, and everyone still to come today is told the new arrival. */
+export function reportDelay(state: State, minutes: number, nowMs: number): { state: State; notified: string[] } {
+  const s = clone(state);
+  const today = localDate(nowMs);
+  const upcoming = s.jobs
+    .filter((j) => ACTIVE.includes(j.status) && localDate(j.startMs) === today && j.startMs + j.delayMin * MIN > nowMs)
+    .sort((a, b) => a.startMs - b.startMs);
+  if (!upcoming.length) throw new BookingError("invalid", "There are no jobs left today to warn.");
+  if (upcoming.some((j) => j.delayMin + minutes > MAX_DELAY_MIN)) {
+    throw new BookingError("invalid", `That would be over ${MAX_DELAY_MIN} minutes behind. At that point it's kinder to call people.`);
+  }
+  for (const j of upcoming) {
+    j.delayMin += minutes;
+    sendForJob(s, j, "delay", nowMs, { minutes });
+  }
+  pushEvent(s, nowMs, "delay", null, `Running ${minutes} min behind: ${upcoming.length} ${upcoming.length === 1 ? "customer" : "customers"} told, new arrivals sent`);
+  return { state: s, notified: upcoming.map((j) => j.customer.name) };
+}
+
+/**
+ * Care plans: after a visit, book the next one. Same weekday and time N weeks on if that's free,
+ * otherwise the nearest open slot within a few days of it. Plan visits cost 10% less and need no deposit.
+ */
+export function scheduleNextVisit(s: State, prev: Job, at: number): Job | null {
+  if (!prev.plan) return null;
+  const base = addDays(localDate(prev.startMs), prev.plan.everyWeeks * 7);
+  const wantMin = localMinutes(prev.startMs);
+  let startMs: number | null = null;
+  for (const off of [0, 1, -1, 2, -2, 3, -3]) {
+    const slots = findSlots(s, prev.durationMin, prev.zone, addDays(base, off), at, undefined, { ignoreHorizon: true });
+    if (slots.length) {
+      startMs = [...slots].sort((a, b) => Math.abs(localMinutes(a) - wantMin) - Math.abs(localMinutes(b) - wantMin))[0];
+      break;
+    }
+  }
+  if (startMs === null) {
+    pushEvent(s, at, "plan_booked", prev.id, `No open slot near ${fmtDay(atPlus(prev))} for ${prev.customer.name}'s next plan visit`);
+    return null;
+  }
+  const q = quote(prev.vehicle.kind, prev.service, prev.addons, prev.zone);
+  const discount = Math.round((q.totalCents * PLAN_DISCOUNT) / 100) * 100;
+  const seq = nextSeq(s);
+  const job: Job = {
+    ...structuredClone(prev),
+    id: `j${seq}`,
+    code: codeFor(seq, new Set(s.jobs.map((j) => j.code))),
+    status: "booked",
+    createdAt: at,
+    startMs,
+    totalCents: q.totalCents - discount,
+    discountCents: discount,
+    dealMin: 0,
+    depositCents: 0,
+    depositState: "applied",
+    movedFrom: [],
+    confirmedAt: null,
+    closedAt: null,
+    closedReason: null,
+    rainOffer: null,
+    ownerFlag: null,
+    rainAffected: false,
+    delayMin: 0,
+    source: "plan",
+  };
+  s.jobs.push(job);
+  sendForJob(s, job, "plan_booked", at);
+  pushEvent(s, at, "plan_booked", job.id, `Care plan: ${job.customer.name}'s next visit booked for ${fmtDay(startMs)} at ${fmtTime(startMs)}`);
+  return job;
+}
+const atPlus = (prev: Job) => prev.startMs + (prev.plan?.everyWeeks ?? 6) * 7 * 24 * HOUR;
+
+/** The customer skips this visit: it's released and the plan carries on from the next interval. */
+export function skipVisit(state: State, id: string, nowMs: number): State {
+  const before = findJob(state, id);
+  if (!before.plan) throw new BookingError("invalid", "This booking isn't on a care plan.");
+  const cancelled = cancelJob(state, id, nowMs, "Skipped by customer (care plan)");
+  const s = clone(cancelled);
+  scheduleNextVisit(s, findJob(s, id), nowMs);
+  return s;
+}
+
+/** End the plan: this visit stays, but no more are booked after it. */
+export function endPlan(state: State, id: string): State {
+  const s = clone(state);
+  const job = findJob(s, id);
+  job.plan = null;
   return s;
 }
 
