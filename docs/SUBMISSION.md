@@ -41,6 +41,7 @@ His real-world friction, which the build takes on directly:
 - **Rain rescheduling:** 48 hours out, an outdoor job in a forecast storm is offered the nearest dry slots; if the customer doesn't pick, the first is taken.
 - **No-show defence:** unconfirmed slots are released 3 hours out and offered to the waitlist, first whose job fits (checked against the drive), two hours to claim.
 - **Self-serve** move and cancel until 24 hours ahead, gate codes editable by the customer, refunds automatic.
+- **"Where's Bertha?"**: a live van tracker on a map of Portland. Customers watch the van drive to them with a live ETA, so nobody texts "where are you?". Dario can scrub and replay his whole day. Privacy is built in: customers only ever see their own stop named.
 - **"Handled for you"** ledger on Dario's console: messages sent, bookings taken, reschedules, gaps refilled, and a transparent estimate of hours saved. "Needs you" shows only what genuinely needs a human.
 
 ## Before / after
@@ -51,6 +52,7 @@ His real-world friction, which the build takes on directly:
 | Confirming a booking | Dario types, then waits | Customer taps a time |
 | Rainy Tuesday | Evening of texts, reschedules | Offers sent, customers pick, first dry option taken if not |
 | Reminders | When he remembers | Scheduled, and they move with the job |
+| "Where are you?" | A text while he's driving | A live map with an ETA |
 | No-shows | A wasted half-day | Deposit, confirm-tap, release at 3 h, waitlist refill |
 | Gate codes | Texted at 7 am | On the morning sheet |
 | Overbooking | Judgement | Impossible: the engine refuses |
@@ -79,6 +81,7 @@ Record at 1440×900 (or a phone-width take for the mobile beat). Open **Demo con
 | 1:45 | **Demo controls → Storm** | Click | "Now heavy rain is forecast for his busiest day." |
 | 1:52 | Messages → Rain filter | Point at rain offers | "Every customer with an outdoor car has been texted the nearest dry times. Covered cars are untouched." |
 | 2:05 | Open a customer link | Tap a dry option | "She picks Thursday. Her reminders move with her. Dario did nothing." |
+| 2:12 | Scroll to **Where's Bertha?** → **Play the day** | Let the van drive | "And instead of texting 'where are you?', she watches Bertha drive to her. Other customers' stops are anonymous." |
 | 2:15 | Waitlist tab | Show an offer out | "Her old slot went to the first person on the waitlist whose job fits. Nobody phoned anybody." |
 | 2:25 | **+6 hours** ×2 | Show a nudge/release | "And if someone never confirms, the slot is released three hours before, and refilled." |
 | 2:35 | Ledger | Point at hours saved | "Hours of admin, gone. Fernhill Mobile Detail. Built with Lovable." |

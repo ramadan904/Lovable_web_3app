@@ -41,6 +41,7 @@ Each one is a rule the booking engine enforces (`src/lib/engine.ts`), not copy o
 - **Self-serve changes:** customers move or cancel themselves until 24 h before, under the same rules as booking. Refunds are automatic.
 - **Waitlist backfill:** a freed slot goes to the first waitlisted customer whose job fits it (checked against the drive), with a 2-hour window, then to the next.
 - **A morning day sheet:** the route in order, drive minutes, refill stop, addresses, gate codes and notes, and who has not confirmed.
+- **"Where's Bertha?" live van tracker.** A schematic map of Portland with the day's route on it and the van driving along it, computed from the very same route the scheduler validates, so it can't disagree with the calendar. Customers see it on their booking page ("2 jobs before yours", "On the way, about 12 min from you", "Detailing your car: 60% done"), and the "on the way" text links to it. Other customers' stops are drawn as anonymous pins, so nobody sees anyone else's name. Dario gets the same map on his day sheet, with a scrubber and a **Play the day** button that replays the whole day (rain included). It replaces the "where are you?" text.
 - **"Handled for you":** a weekly ledger of messages sent, bookings taken, reschedules and gaps refilled, with a transparent estimate of hours saved. Nothing is hidden: the "Needs you" list only shows what truly needs a human (for example a request for ceramic coating, which isn't on the menu).
 
 ## Run it
@@ -77,6 +78,7 @@ src/lib/engine.ts       the scheduling rules: checkDay, validate, findSlots, dry
 src/lib/ops.ts          state transitions: book, move, cancel, confirm, rain, waitlist
 src/lib/automations.ts  the timeline of scheduled steps and the tick that runs them
 src/lib/inquiry.ts      the front door: parse a message, build a reply and a prefilled link
+src/lib/tracker.ts      where the van is at any minute of the day, and each customer's ETA
 src/lib/ledger.ts       "handled for you" counts and time-saved estimates
 src/lib/seed.ts         a believable week, generated relative to today
 src/lib/store.ts        persisted store + demo clock
@@ -97,7 +99,7 @@ Being honest about the boundary of the demo:
 ## Tests
 
 ```bash
-npm test        # 60+ unit tests: drive/refill/day-limit rules, booking races, rain, waitlist, seed validity on 21 different "today"s
+npm test        # 70+ unit tests: drive/refill/day-limit rules, booking races, rain, waitlist, seed validity on 21 different "today"s
 npm run e2e     # Playwright: full journeys and axe-core WCAG 2.1 AA audits, desktop + mobile
 npm run lint    # tsc --noEmit
 ```

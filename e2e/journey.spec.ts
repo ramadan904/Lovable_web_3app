@@ -124,3 +124,60 @@ test("the calendar never offers a time that breaks the drive rules", async ({ pa
   expect(times).not.toContain("8:00 AM");
   expect(times).not.toContain("8:30 AM");
 });
+
+test.describe("Where's Bertha?", () => {
+  const FIRST_NAMES = /Maya|Jordan|Sam\b|Renata|Ben\b|Lila|Marcus|Hannah|Owen/;
+
+  test("Dario can scrub and play back his whole day on the map", async ({ page }) => {
+    await page.goto("/owner");
+    const map = page.getByRole("region", { name: "Where's Bertha?" });
+    await expect(map).toBeVisible();
+    const scrub = map.getByRole("slider", { name: /Scrub through the day/ });
+    await scrub.fill("560"); // 9:20 am
+    await expect(map.getByText(/Bertha is (driving|detailing|setting up|loading|at the base)/).first()).toBeVisible();
+    const chip = map.getByText(/Preview of the day|Replay|Live/).first();
+    const before = await chip.textContent();
+    await map.getByRole("button", { name: "Play the day" }).click();
+    await expect(async () => expect(await chip.textContent()).not.toBe(before)).toPass({ timeout: 5000 });
+    await map.getByRole("button", { name: "Pause" }).click();
+  });
+
+  test("a customer sees their own stop and ETA, and no other customer's name", async ({ page }) => {
+    await bookThroughUi(page, "Privacy Pat", 1);
+    const map = page.getByRole("region", { name: "Where's Bertha?" });
+    await expect(map).toBeVisible();
+    await expect(map.getByText(/job before yours|jobs before yours|You're next|starts the day at 8:00|On the way|arrived|Detailing/).first()).toBeVisible();
+    const drawn = (await map.locator("svg[role=img] text").allTextContents()).join(" ");
+    expect(drawn).toContain("You");
+    expect(drawn).not.toMatch(FIRST_NAMES);
+    expect(await map.locator("svg[role=img]").getAttribute("aria-label")).not.toMatch(FIRST_NAMES);
+    // Their own ETA follows the scrubber: at 8:00 nothing has started.
+    await map.getByRole("slider").fill("470");
+    await expect(map.getByText(/Bertha is (loading|at the base)/).first()).toBeVisible();
+  });
+
+  test("on the morning of the job the map is live and follows the demo clock", async ({ page }) => {
+    await bookThroughUi(page, "Live Larry", 1);
+    // Like a real customer: confirm when the reminder arrives, while the day approaches in 6-hour steps.
+    const live = page.getByText(/Live · /);
+    const confirm = page.getByRole("button", { name: /Yes, I'll be there/ });
+    for (let i = 0; i < 30 && !(await live.isVisible()); i++) {
+      if (await confirm.isVisible()) await confirm.click();
+      await demo(page, /\+6 hours/);
+    }
+    await expect(live).toBeVisible();
+  });
+});
+
+test("every fast-forward click moves the demo clock on screen straight away", async ({ page }) => {
+  await page.goto("/owner");
+  await page.getByRole("button", { name: "Open demo controls" }).click();
+  const clock = page.getByRole("region", { name: "Demo controls" }).getByText(/It's \w{3} \d/);
+  const seen = new Set<string>([(await clock.textContent()) ?? ""]);
+  for (let i = 0; i < 3; i++) {
+    await page.getByRole("button", { name: /\+6 hours/ }).click();
+    await expect(async () => expect(seen.has((await clock.textContent()) ?? "")).toBe(false)).toPass({ timeout: 2000 });
+    seen.add((await clock.textContent()) ?? "");
+  }
+  expect(seen.size).toBe(4);
+});

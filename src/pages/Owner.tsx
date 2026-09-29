@@ -174,7 +174,7 @@ export default function Owner() {
                 </button>
               ))}
             </div>
-            <DaySheet state={state} date={selectedDay} />
+            <DaySheet state={state} date={selectedDay} now={now} />
           </div>
         )}
         {tab === "week" && <WeekView state={state} from={addDays(today, -1)} />}

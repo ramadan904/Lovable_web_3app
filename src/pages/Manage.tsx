@@ -4,6 +4,7 @@ import { CalendarPlus, Check, CheckCircle2, CloudRain, MapPin, MessageSquare, Um
 import { toast } from "sonner";
 import { PhoneThread } from "@/components/PhoneThread";
 import { SlotPicker } from "@/components/SlotPicker";
+import { Tracker } from "@/components/Tracker";
 import { Button } from "@/components/ui/button";
 import { Input, Textarea } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,7 +15,7 @@ import { CAN_DOWNLOAD, downloadIcs } from "@/lib/ics";
 import { ACTIVE, BookingError } from "@/lib/model";
 import { getJob } from "@/lib/ops";
 import { actions, useStore } from "@/lib/store";
-import { HOUR, fmtDayLong, fmtRelative, fmtStamp, fmtTime } from "@/lib/time";
+import { HOUR, localDate, fmtDayLong, fmtRelative, fmtStamp, fmtTime } from "@/lib/time";
 import { cn } from "@/lib/utils";
 
 const STATUS: Record<string, { label: string; tone: string }> = {
@@ -119,6 +120,8 @@ export default function Manage() {
             </dl>
             {active && CAN_DOWNLOAD && <Button variant="outline" size="sm" className="mt-5" onClick={() => downloadIcs(job)}><CalendarPlus /> Add to calendar</Button>}
           </section>
+
+          {active && <Tracker state={state} date={localDate(job.startMs)} now={now} focusJobId={job.id} />}
 
           {active && <AccessCard key={job.id} id={job.id} gate={job.access.gateCode} notes={job.access.notes} />}
 

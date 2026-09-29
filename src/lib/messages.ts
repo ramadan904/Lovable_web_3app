@@ -68,7 +68,7 @@ export function composeForJob(kind: MessageKind, job: Job, extra: { options?: nu
     case "omw":
       return {
         channel: "sms", direction: "out",
-        body: `${hi} ${BUSINESS.owner} is on the way in ${BUSINESS.van}, the white Transit. Arriving around ${fmtTime(job.startMs)}. ${job.access.gateCode ? "He has your gate code." : ""}`.trim(),
+        body: `${hi} ${BUSINESS.owner} is on the way in ${BUSINESS.van}, the white Transit. Arriving around ${fmtTime(job.startMs)}. Watch the van live: ${link}${job.access.gateCode ? " He has your gate code." : ""}`.trim(),
       };
     case "aftercare":
       return {

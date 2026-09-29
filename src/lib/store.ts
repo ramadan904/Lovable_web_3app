@@ -90,9 +90,8 @@ export const actions = {
   fastForward(hours: number) {
     const from = nowMs();
     const to = from + hours * HOUR;
-    const next = advance(state, from, to);
-    next.clockOffsetMs += to - from;
-    set(next);
+    // Always a new object: advance() returns the same one when nothing was due.
+    set({ ...advance(state, from, to), clockOffsetMs: state.clockOffsetMs + (to - from) });
   },
   /** Jump to 7:30 am on the next working day that has a job. */
   jumpToNextJobMorning() {
@@ -105,9 +104,7 @@ export const actions = {
       if (t > from && OPEN_WEEKDAYS.includes(weekdayOf(d)) && activeJobs(state).some((j) => localDate(j.startMs) === d)) target = t;
     }
     if (target === null) return;
-    const next = advance(state, from, target);
-    next.clockOffsetMs += target - from;
-    set(next);
+    set({ ...advance(state, from, target), clockOffsetMs: state.clockOffsetMs + (target - from) });
   },
   /**
    * An atmospheric river is forecast for the day with the most outdoor work. Rain checks
@@ -128,9 +125,7 @@ export const actions = {
     const target = Math.max(from, earliest - 46 * HOUR);
     const next = structuredClone(state);
     next.stormDays = [...new Set([...next.stormDays, date])];
-    const done = advance(next, from, target);
-    done.clockOffsetMs += target - from;
-    set(done);
+    set({ ...advance(next, from, target), clockOffsetMs: next.clockOffsetMs + (target - from) });
     return { date, jumpedHours: Math.round((target - from) / HOUR) };
   },
   clearStorm() { set({ ...state, stormDays: [] }); },
