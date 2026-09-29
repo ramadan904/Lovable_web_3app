@@ -12,7 +12,11 @@ const NotFound = lazy(() => import("./pages/NotFound"));
 
 function ScrollToTop() {
   const { pathname } = useLocation();
-  useEffect(() => window.scrollTo({ top: 0 }), [pathname]);
+  // Braces matter: an effect must return nothing or a cleanup function, and newer browsers make
+  // scrollTo() return a Promise, which React would try to call as a cleanup on the next navigation.
+  useEffect(() => {
+    window.scrollTo({ top: 0 });
+  }, [pathname]);
   return null;
 }
 

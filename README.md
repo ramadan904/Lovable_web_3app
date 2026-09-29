@@ -115,6 +115,10 @@ npm run lint    # tsc --noEmit
 
 Unit tests cover, among others: a Westside job cannot start before 8:50, the third job needs the refill stop, a fourth job is refused, a slot taken mid-booking fails cleanly, moves are refused inside 24 hours, a cancelled slot is offered to a waitlisted customer and passed on after two hours, a storm moves outdoor jobs and never touches covered ones, and the seed is valid whichever day the app is opened.
 
+## A bug worth remembering
+
+CI caught a crash that only newer Chrome triggers: a route-change effect written as `useEffect(() => window.scrollTo(...))` returned whatever `scrollTo` returns. Newer browsers return a Promise, React tried to call it as a cleanup function on the next navigation, and the whole page went blank (right after every booking). Effects now use braces, and `e2e/journey.spec.ts` simulates the Promise-returning `scrollTo` so it can't come back.
+
 ## Accessibility
 
 Native radios and checkboxes for every choice, labelled fields with inline errors, focus moved to each step's heading, a skip link, `aria-live` results, visible focus rings, reduced-motion respected, and an axe-core audit on every page and every booking step in CI.

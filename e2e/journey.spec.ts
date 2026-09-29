@@ -226,3 +226,24 @@ test("a neighbour deal shows on the calendar, comes off the price, and follows t
   await expectBooked(page);
   await expect(page.getByText(`−$${off} neighbour deal`)).toBeVisible();
 });
+
+test("in-app navigation survives browsers whose scrollTo() returns a Promise", async ({ page }) => {
+  // Newer Chrome does this; an effect that returned it made React crash on the next navigation.
+  await page.addInitScript(() => {
+    const original = window.scrollTo.bind(window);
+    (window as unknown as { scrollTo: (...a: unknown[]) => Promise<void> }).scrollTo = (...a: unknown[]) => {
+      (original as (...b: unknown[]) => void)(...a);
+      return Promise.resolve();
+    };
+  });
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.goto("/");
+  await page.getByRole("link", { name: /Owner view/ }).first().click();
+  await expect(page.getByRole("heading", { name: /Good (morning|afternoon|evening), Dario/ })).toBeVisible();
+  await page.getByRole("link", { name: /Book a detail/ }).first().click();
+  await expect(page.getByRole("heading", { name: /Real times/ })).toBeVisible();
+  await page.getByRole("link", { name: "Fernhill Mobile Detail, home" }).click();
+  await expect(page.getByRole("heading", { level: 1 }).first()).toBeVisible();
+  expect(errors).toEqual([]);
+});
