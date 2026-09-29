@@ -33,8 +33,10 @@ async function bookThroughUi(page: Page, name = "Test Driver", dayIndex = 0) {
 /** Use a demo control. On phones the panel closes itself after each action, so open it on demand. */
 async function demo(page: Page, name: RegExp) {
   const open = page.getByRole("button", { name: "Open demo controls" });
+  const target = page.getByRole("button", { name });
+  await open.or(target).first().waitFor();
   if (await open.isVisible()) await open.click();
-  await page.getByRole("button", { name }).click();
+  await target.click();
 }
 
 test.beforeEach(async ({ page }) => {
@@ -174,6 +176,8 @@ test("every fast-forward click moves the demo clock on screen straight away", as
   await page.goto("/owner");
   const read = async () => {
     const open = page.getByRole("button", { name: "Open demo controls" });
+    const panel = page.getByRole("region", { name: "Demo controls" });
+    await open.or(panel).first().waitFor();
     if (await open.isVisible()) await open.click();
     return (await page.getByRole("region", { name: "Demo controls" }).getByText(/It's \w{3} \d/).textContent()) ?? "";
   };
