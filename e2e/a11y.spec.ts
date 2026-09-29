@@ -136,3 +136,14 @@ test("owner with the running-late banner and care plan tiles", async ({ page }) 
   await expect(page.getByText(/Running about 20 min behind/).first()).toBeVisible();
   await audit(page);
 });
+
+test("the guided story panel, on the landing page and in rain mode", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Watch the 90-second story" }).click();
+  await expect(page.getByRole("region", { name: "Guided story" })).toContainText("Meet Dario");
+  await audit(page);
+  const panel = page.getByRole("region", { name: "Guided story" });
+  for (let i = 0; i < 4; i++) await panel.getByRole("button", { name: "Next" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-weather", "rain");
+  await audit(page);
+});

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, CalendarCheck, CloudRain, MapPin, Send, Sparkles, Truck, Umbrella } from "lucide-react";
+import { ArrowRight, CalendarCheck, CloudRain, MapPin, Play, Send, Sparkles, Truck, Umbrella } from "lucide-react";
 import { Van } from "@/components/Van";
 import { useWeatherMood } from "@/hooks/useWeatherMood";
 import { WeatherIcon } from "@/components/Weather";
@@ -12,6 +12,7 @@ import { slotsByDay } from "@/lib/engine";
 import { bookingLink, parseInquiry, understood } from "@/lib/inquiry";
 import type { Inquiry } from "@/lib/model";
 import { actions, useStore } from "@/lib/store";
+import { storyStore } from "@/lib/story";
 import { addDays, fmtDate, fmtDay, fmtTime, localDate } from "@/lib/time";
 import { forecastFor } from "@/lib/weather";
 import { cn } from "@/lib/utils";
@@ -81,6 +82,10 @@ export default function Index() {
                 ))}
               </div>
             </form>
+            <p className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-foreground/80">
+              New here?
+              <Button type="button" variant="outline" size="sm" onClick={storyStore.start}><Play /> Watch the 90-second story</Button>
+            </p>
 
             {answer && parsed && (
               <div className="mt-4 max-w-xl space-y-3 animate-rise-in" role="status" aria-live="polite">

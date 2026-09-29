@@ -6,6 +6,7 @@ import { useApplyWeatherMood, useWeatherMood } from "@/hooks/useWeatherMood";
 import { relativeDay, localDate } from "@/lib/time";
 import { useNow } from "@/hooks/useNow";
 import { DemoBar } from "./DemoBar";
+import { Story } from "./Story";
 import { LogoMark } from "./Van";
 import { WeatherChip } from "./Weather";
 import { Button } from "./ui/button";
@@ -66,6 +67,7 @@ export function Layout() {
           </div>
         </div>
       </footer>
+      <Story />
       <DemoBar />
     </div>
   );

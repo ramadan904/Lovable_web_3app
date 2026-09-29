@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { Clock4, CloudLightning, FastForward, Moon, RotateCcw, SunMedium, FlaskConical, UserX, X } from "lucide-react";
+import { Clock4, CloudLightning, Play, FastForward, Moon, RotateCcw, SunMedium, FlaskConical, UserX, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { useNow } from "@/hooks/useNow";
 import { actions, useStore } from "@/lib/store";
+import { useStory, storyStore } from "@/lib/story";
 import { HOUR, fmtDay, fmtDate, fmtStamp } from "@/lib/time";
 
 /** The controls that make a week of a small business watchable in a minute. */
@@ -12,6 +13,7 @@ export function DemoBar() {
   const now = useNow();
   const state = useStore();
   const shifted = Math.round(state.clockOffsetMs / HOUR);
+  const story = useStory();
 
   /** On phones the panel covers half the screen, so it gets out of the way after each action. */
   const done = () => {
@@ -27,6 +29,8 @@ export function DemoBar() {
     });
   };
 
+  // The story has its own panel; keep the two out of each other's way.
+  if (story.active) return null;
   if (!open) {
     return (
       <button
@@ -53,6 +57,7 @@ export function DemoBar() {
         </button>
       </div>
       <div className="grid gap-2">
+        <Button variant="outline" size="sm" className="border-background/30 bg-transparent text-background hover:bg-background/10 hover:text-background" onClick={() => { setOpen(false); storyStore.start(); }}><Play /> Play the 90-second story</Button>
         <Button variant="sun" size="sm" onClick={storm}><CloudLightning /> Storm hits the busiest outdoor day</Button>
         <div className="grid grid-cols-2 gap-2">
           <Button variant="outline" size="sm" className="border-background/30 bg-transparent text-background hover:bg-background/10 hover:text-background" onClick={() => { done(); actions.fastForward(1); toast("Fast-forwarded 1 hour", { description: "Reminders, nudges and releases fire as their times pass." }); }}>

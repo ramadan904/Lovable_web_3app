@@ -595,3 +595,74 @@ test.describe("Natural language to a confirmed booking", () => {
     await expect(page.getByText(/Earliest dry times/)).toBeVisible();
   });
 });
+
+test.describe("The guided story", () => {
+  test("plays from the landing page through the storm to the end, and hands the visitor a fresh week", async ({ page }) => {
+    const errors: string[] = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+    await page.goto("/");
+    await page.getByRole("button", { name: "Watch the 90-second story" }).click();
+    const panel = page.getByRole("region", { name: "Guided story" });
+    await expect(panel).toContainText("Meet Dario");
+    await expect(panel).toContainText("1 of 9");
+
+    await panel.getByRole("button", { name: "Next" }).click();
+    await expect(panel).toContainText("A customer texts once");
+    await expect(page).toHaveURL(/\/book\?.*src=ask/);
+    await expect(page.getByRole("region", { name: "What we read from your message" })).toBeVisible();
+
+    await panel.getByRole("button", { name: "Next" }).click();
+    await expect(panel).toContainText("A deposit that feels safe");
+    await panel.getByRole("button", { name: "Next" }).click();
+    await expect(page).toHaveURL(/\/owner/);
+    await expect(page.getByRole("heading", { name: "Handled for you this week" })).toBeVisible();
+
+    // The storm: the whole app turns to its rain colours.
+    await panel.getByRole("button", { name: "Next" }).click();
+    await expect(panel).toContainText(/Heavy rain is forecast for/);
+    await expect(page.locator("html")).toHaveAttribute("data-weather", "rain");
+
+    await panel.getByRole("button", { name: "Next" }).click();
+    await expect(panel).toContainText("Customers move themselves");
+
+    // The customer's live view of the van, then Bertha running late.
+    await panel.getByRole("button", { name: "Next" }).click();
+    await expect(panel).toContainText("Where's Bertha?");
+    await expect(page).toHaveURL(/\/b\/FH-[A-Z0-9]{4}/);
+    await panel.getByRole("button", { name: "Next" }).click();
+    await expect(panel).toContainText("Running 20 minutes behind");
+    await expect(page.getByRole("status", { name: "Running late" })).toBeVisible();
+
+    await panel.getByRole("button", { name: "Next" }).click();
+    await expect(panel).toContainText("Hours of admin, gone");
+    await expect(panel.getByRole("button", { name: "Next" })).toHaveCount(0);
+    await panel.getByRole("button", { name: /Try it yourself/ }).click();
+    await expect(page).toHaveURL(/\/book/);
+    await expect(panel).toHaveCount(0);
+    await expect(page.locator("html")).not.toHaveAttribute("data-weather", "rain"); // a fresh, dry week
+    expect(errors).toEqual([]);
+  });
+
+  test("a shared /?story=1 link starts it, and Escape closes it", async ({ page }) => {
+    await page.goto("/?story=1");
+    const panel = page.getByRole("region", { name: "Guided story" });
+    await expect(panel).toContainText("Meet Dario");
+    await panel.getByRole("button", { name: "Auto-play" }).click();
+    await expect(panel.getByRole("button", { name: "Pause" })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(panel).toHaveCount(0);
+  });
+
+  test("the panel fits a phone and the demo controls stay reachable after it closes", async ({ page }) => {
+    await page.goto("/");
+    await page.getByRole("button", { name: "Watch the 90-second story" }).click();
+    const panel = page.getByRole("region", { name: "Guided story" });
+    const box = await panel.boundingBox();
+    const vp = page.viewportSize()!;
+    expect(box!.x).toBeGreaterThanOrEqual(0);
+    expect(box!.x + box!.width).toBeLessThanOrEqual(vp.width);
+    await expect(page.getByRole("button", { name: "Open demo controls" })).toHaveCount(0); // not stacked on top of it
+    await panel.getByRole("button", { name: "Close the story" }).click();
+    await expect(page.getByRole("button", { name: "Open demo controls" })).toBeVisible();
+  });
+});

@@ -69,6 +69,10 @@ His real-world friction, which the build takes on directly:
 3. **Craft and execution:** 60+ unit tests on the scheduling rules, Playwright journeys on desktop and mobile, axe-core WCAG 2.1 AA audits on every page and booking step, no horizontal scroll on any page at phone width, reduced-motion respected, working empty/error/race states (a slot taken mid-booking returns you to the calendar without losing anything).
 4. **Storytelling:** the landing page shows the same customer before and after; the owner console opens with "Nothing needs you right now."
 
+## For judges who never press play
+
+Put this in the submission text: **open the app, then tap "Watch the 90-second story"**, or add `?story=1` to the link (on GitHub Pages: `.../Lovable_web_3app/#/?story=1`). It is a captioned, nine-step run over the real app (text to booking, the deposit, the owner's morning, a storm, customers moving themselves, the live van map, a running-late text, the result) with Next and Auto-play. It works on a phone and needs no sign-in.
+
 ## Demo video: 2:40
 
 Record at 1440×900 (or a phone-width take for the mobile beat). Open **Demo controls** first, so viewers see where the storm button lives. Click **Reset** right before recording for a fresh week.
