@@ -50,6 +50,11 @@ export function SlotPicker({ durationMin, zone, parking, now, value, onChange, e
   const wished = preferDate ? withSlots.find((d) => d.date === preferDate) : undefined;
   const selected = days.find((d) => d.date === (picked ?? dateOfValue)) ?? wished ?? bestDry ?? withSlots[0];
 
+  // The customer asked for a particular day and it has nothing open: say so, instead of silently showing another.
+  const wishedDay = preferDate ? days.find((d) => d.date === preferDate) : undefined;
+  const wishMissed = !!preferDate && !picked && !value && !wished && !!selected && !!wishedDay;
+  const wishReason = wishedDay?.reason === "wet" ? "is forecast wet" : "is fully booked";
+
   useEffect(() => {
     if (picked && !days.find((d) => d.date === picked)?.slots.length) setPicked(null);
   }, [days, picked]);
@@ -138,6 +143,11 @@ export function SlotPicker({ durationMin, zone, parking, now, value, onChange, e
             <WeatherChip f={selected.forecast} />
             {covered && <span className="chip border-fern/30 bg-fern-soft text-fern-ink"><Umbrella className="size-3.5" aria-hidden="true" /> Covered: rain can't move you</span>}
           </div>
+          {wishMissed && (
+            <p role="note" className="rounded-md border border-sun/50 bg-sun-soft p-3 text-sm text-sun-ink">
+              <strong>{fmtDate(preferDate!, "EEEE, MMMM d")}</strong> {wishReason}, so we opened the next day with room: {fmtDate(selected!.date, "EEEE, MMMM d")}. Pick any day above.
+            </p>
+          )}
           {wetPick && (
             <p role="note" className="flex gap-2 rounded-md border border-rain/30 bg-rain-soft p-3 text-sm text-rain">
               <CloudRain className="mt-0.5 size-4 shrink-0" aria-hidden="true" />

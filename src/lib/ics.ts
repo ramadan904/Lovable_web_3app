@@ -1,5 +1,6 @@
 import { BUSINESS, SERVICES } from "./business";
 import type { Job } from "./model";
+import { portalLink } from "./messages";
 
 const stamp = (ms: number) => new Date(ms).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
 const esc = (s: string) => s.replace(/([,;\\])/g, "\\$1").replace(/\n/g, "\\n");
@@ -12,7 +13,7 @@ export function icsFor(job: Job): string {
     `UID:${job.code}@fernhill.app`, `DTSTAMP:${stamp(job.createdAt)}`, `DTSTART:${stamp(job.startMs)}`, `DTEND:${stamp(end)}`,
     `SUMMARY:${esc(`${SERVICES[job.service].name} · ${BUSINESS.name}`)}`,
     `LOCATION:${esc(job.address)}`,
-    `DESCRIPTION:${esc(`Booking ${job.code}. ${BUSINESS.owner} comes to you. Manage: fernhill.app/b/${job.code}`)}`,
+    `DESCRIPTION:${esc(`Booking ${job.code}. ${BUSINESS.owner} comes to you. Manage: ${portalLink(job.code)}`)}`,
     "BEGIN:VALARM", "TRIGGER:-PT2H", "ACTION:DISPLAY", "DESCRIPTION:Fernhill detail today", "END:VALARM", "END:VEVENT", "END:VCALENDAR",
   ].join("\r\n");
 }
@@ -34,7 +35,7 @@ export function googleCalendarUrl(job: Job): string {
     text: `${SERVICES[job.service].name} · ${BUSINESS.name}`,
     dates: `${stamp(job.startMs)}/${stamp(end)}`,
     location: job.address,
-    details: `Booking ${job.code}. ${BUSINESS.owner} comes to you. Manage: fernhill.app/b/${job.code}`,
+    details: `Booking ${job.code}. ${BUSINESS.owner} comes to you. Manage: ${portalLink(job.code)}`,
   });
   return `https://calendar.google.com/calendar/render?${q.toString()}`;
 }

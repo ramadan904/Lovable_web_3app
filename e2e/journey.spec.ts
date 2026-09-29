@@ -569,7 +569,9 @@ test.describe("Natural language to a confirmed booking", () => {
     await expectBooked(page);
     await expect(page.getByText("Booking code", { exact: true })).toBeVisible();
     const banner = page.getByRole("region", { name: "Your booking page" });
-    await expect(banner).toContainText(/fernhill\.app\/b\/FH-[A-Z0-9]{4}/);
+    // The link is a real address for wherever the app is hosted, so pasting it into a browser opens the booking.
+    const code = new URL(page.url()).pathname.match(/\/b\/(FH-[A-Z0-9]{4})/)![1];
+    await expect(banner).toContainText(`${new URL(page.url()).origin}/b/${code}`);
     await expect(banner.getByRole("button", { name: "Copy link" })).toBeVisible();
     await expect(page.getByRole("link", { name: /Add to calendar|Google Calendar/ }).first()).toHaveAttribute("href", /calendar\.google\.com\/calendar\/render/);
     await expect(page.getByRole("button", { name: "Reschedule", exact: true })).toBeVisible();

@@ -13,7 +13,7 @@ import { useNow } from "@/hooks/useNow";
 import { timelineFor } from "@/lib/automations";
 import { ADDONS, BUSINESS, FREE_CHANGE_H, PARKING, PLAN_DISCOUNT, RAIN_CHECK_H, SERVICES, ZONES, dollars, hoursLabel, isCovered, needsDryDay } from "@/lib/business";
 import { CAN_DOWNLOAD, downloadIcs, googleCalendarUrl } from "@/lib/ics";
-import { APP_HOST } from "@/lib/messages";
+import { portalLink } from "@/lib/messages";
 import { dryOptions } from "@/lib/engine";
 import { ACTIVE, BookingError } from "@/lib/model";
 import { getJob } from "@/lib/ops";
@@ -96,7 +96,7 @@ export default function Manage() {
     );
   };
   const copyLink = () => {
-    const link = `${APP_HOST}/b/${job.code}`;
+    const link = portalLink(job.code);
     navigator.clipboard?.writeText(link).then(
       () => toast.success("Link copied"),
       () => toast(`Your booking page is ${link}`),
@@ -146,7 +146,7 @@ export default function Manage() {
               <div className="min-w-0">
                 <p className="text-sm font-bold">Your booking page</p>
                 <p className="text-sm text-primary-foreground/80">Come back any time to confirm, reschedule or cancel. We've texted you this link too.</p>
-                <p className="mt-1 break-all font-mono text-sm font-semibold">{APP_HOST}/b/{job.code}</p>
+                <p className="mt-1 break-all font-mono text-sm font-semibold">{portalLink(job.code)}</p>
               </div>
               <Button variant="outline" size="sm" className="border-primary-foreground/40 bg-transparent text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground" onClick={copyLink}><Copy /> Copy link</Button>
             </section>
