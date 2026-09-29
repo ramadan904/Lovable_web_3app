@@ -201,7 +201,7 @@ function Tile({ icon, value, label, accent = false }: { icon: React.ReactNode; v
 
 function Headline({ icon, value, label, sub, accent = false }: { icon: React.ReactNode; value: string; label: string; sub: string; accent?: boolean }) {
   return (
-    <div className={cn("card flex flex-col p-5", accent && "border-primary bg-primary text-primary-foreground")}>
+    <div className={cn("card flex flex-col p-5", accent && "iris-border text-primary-foreground")} style={accent ? ({ "--iris-fill": "hsl(var(--primary))" } as React.CSSProperties) : undefined}>
       <div className={cn("mb-2", accent ? "text-sun" : "text-fern")} aria-hidden="true">{icon}</div>
       <dt className={cn("order-1 text-sm font-semibold", accent ? "text-primary-foreground" : "text-foreground")}>{label}</dt>
       <dd className="order-2 mt-1 font-display text-4xl font-extrabold leading-none">{value}</dd>

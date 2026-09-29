@@ -23,7 +23,7 @@ export function DemoBar() {
     const r = actions.stormOnBusiestOutdoorDay();
     if (!r) return toast("No outdoor jobs left to rain on.", { description: "Reset the demo for a fresh week." });
     toast.success(`Heavy rain forecast for ${fmtDate(r.date, "EEEE, MMM d")}`, {
-      description: r.jumpedHours ? `Clock moved ${r.jumpedHours} h forward to the 48-hour rain check. Watch the messages: nobody had to lift a finger.` : "The 48-hour rain check ran. Watch the messages.",
+      description: r.jumpedHours ? `The whole app turns to its rain palette. Clock moved ${r.jumpedHours} h forward to the 48-hour rain check. Watch the messages: nobody had to lift a finger.` : "The app turns to its rain palette and the 48-hour rain check ran. Watch the messages.",
     });
   };
 

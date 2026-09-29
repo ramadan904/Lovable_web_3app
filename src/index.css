@@ -17,7 +17,7 @@
     --border: 40 16% 82%;
     --input: 40 14% 70%;
     --ring: 160 52% 28%;
-    --primary: 160 46% 21%;
+    --primary: 162 52% 19%;
     --primary-foreground: 42 38% 97%;
     --fern-soft: 150 32% 90%;
     --fern-ink: 160 50% 16%;
@@ -30,6 +30,42 @@
     --danger-soft: 8 70% 94%;
     --radius: 1rem;
     color-scheme: light;
+
+    /*
+     * Where each colour comes from, so nothing here is arbitrary:
+     *   fern / primary   Douglas-fir needles on a wet morning
+     *   paper            unbleached shop-invoice paper
+     *   sun              a rare dry-day sun
+     *   rain             Willamette River under cloud
+     *   iris-*           pearl paint and water beading on a freshly sealed panel
+     */
+    --iris-1: 172 80% 24%;  /* teal, the green flash on pearl */
+    --iris-2: 212 85% 40%;  /* azure */
+    --iris-3: 265 68% 46%;  /* violet */
+    --iris-4: 335 78% 42%;  /* Rose City rose */
+    --iris-glow: 0.11;      /* how visible the soft glows are */
+  }
+
+  /*
+   * Rain mode. Portland rain is overcast grey-blue, not bright blue: the paper cools, the fir goes to
+   * wet-asphalt petrol, and the warm amber stays, like sodium streetlights on a wet road.
+   * Switched on by the app when it is raining (or a storm is forecast within two days).
+   */
+  :root[data-weather="rain"] {
+    --background: 214 20% 92%;
+    --foreground: 216 32% 12%;
+    --card: 214 28% 97%;
+    --muted: 214 16% 87%;
+    --muted-foreground: 214 18% 28%;
+    --border: 214 14% 77%;
+    --input: 214 12% 58%;
+    --primary: 203 42% 20%;
+    --primary-foreground: 210 40% 97%;
+    --fern-soft: 200 24% 88%;
+    --fern-ink: 203 48% 15%;
+    --rain: 211 46% 34%;
+    --rain-soft: 214 40% 89%;
+    --iris-glow: 0.16;
   }
 
   * { @apply border-border; }
@@ -46,6 +82,7 @@
 
   body {
     @apply bg-background font-sans text-foreground antialiased;
+    transition: background-color 700ms ease, color 700ms ease;
     font-size: 1rem;
     line-height: 1.55;
   }
@@ -78,12 +115,51 @@
     background-image: repeating-linear-gradient(45deg, hsl(var(--rain) / 0.35) 0 2px, transparent 2px 7px);
     background-color: hsl(var(--rain-soft));
   }
+  /* Pearl sheen. Used sparingly: one headline word, hairlines, and soft glows. */
+  .iris-text {
+    color: hsl(var(--iris-2));
+  }
+  @supports (background-clip: text) or (-webkit-background-clip: text) {
+    .iris-text {
+      background-image: linear-gradient(100deg, hsl(var(--iris-1)), hsl(var(--iris-2)) 28%, hsl(var(--iris-3)) 55%, hsl(var(--iris-4)) 78%, hsl(var(--iris-1)));
+      background-size: 240% 100%;
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      -webkit-text-fill-color: transparent;
+      animation: iris-drift 14s ease-in-out infinite alternate;
+    }
+  }
+  .iris-bar {
+    background-image: linear-gradient(90deg, hsl(var(--iris-1)), hsl(var(--iris-2)), hsl(var(--iris-3)), hsl(var(--iris-4)), hsl(var(--iris-1)));
+    background-size: 200% 100%;
+    animation: iris-drift 18s ease-in-out infinite alternate;
+  }
+  /* A gradient hairline border around a filled shape. Set --iris-fill to the inside colour. */
+  .iris-border {
+    border: 2px solid transparent;
+    background:
+      linear-gradient(var(--iris-fill, hsl(var(--card))), var(--iris-fill, hsl(var(--card)))) padding-box,
+      linear-gradient(120deg, hsl(var(--iris-1)), hsl(var(--iris-2)), hsl(var(--iris-3)), hsl(var(--iris-4))) border-box;
+  }
+  /* Soft coloured light behind a hero: rose and teal glows, barely there. */
+  .iris-glow {
+    background-image:
+      radial-gradient(60rem 26rem at 8% -10%, hsl(var(--iris-1) / var(--iris-glow)), transparent 60%),
+      radial-gradient(50rem 24rem at 96% 0%, hsl(var(--iris-4) / calc(var(--iris-glow) * 0.8)), transparent 62%),
+      radial-gradient(44rem 22rem at 70% 110%, hsl(var(--iris-3) / calc(var(--iris-glow) * 0.7)), transparent 60%);
+  }
   .road {
     background-image: linear-gradient(90deg, hsl(var(--foreground) / 0.5) 50%, transparent 50%);
     background-size: 24px 2px;
     background-repeat: repeat-x;
     background-position: 0 50%;
   }
+}
+
+@keyframes iris-drift {
+  from { background-position: 0% 50%; }
+  to { background-position: 100% 50%; }
 }
 
 @media (prefers-reduced-motion: reduce) {

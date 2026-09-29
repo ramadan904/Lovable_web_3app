@@ -417,3 +417,17 @@ test("cancelling after rain has changed the booking is a full refund, even insid
   await expect(page.getByText("Cancelled", { exact: true }).first()).toBeVisible();
   await expect(page.getByText(/deposit is on its way back in full/)).toBeVisible();
 });
+
+test("the app changes colour with the weather: a storm turns it to the rain palette, with rain in the header", async ({ page }) => {
+  await page.goto("/owner");
+  await demo(page, /Storm hits the busiest outdoor day/);
+  await expect(page.locator("html")).toHaveAttribute("data-weather", "rain");
+  const bg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  // Rain paper is a cool grey-blue: blue channel above red.
+  const [r, , b] = (bg.match(/\d+/g) ?? []).map(Number);
+  expect(b).toBeGreaterThan(r);
+  await expect(page.getByLabel("Weather in Portland")).toContainText(/Heavy rain/);
+  // The pearl sheen is there in both moods: one gradient headline word on the landing page.
+  await page.goto("/");
+  await expect(page.locator(".iris-text").first()).toBeVisible();
+});

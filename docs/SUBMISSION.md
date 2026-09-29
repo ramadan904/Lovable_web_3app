@@ -43,6 +43,7 @@ His real-world friction, which the build takes on directly:
 - **Self-serve** move and cancel until 24 hours ahead, gate codes editable by the customer, refunds automatic.
 - **The rain promise is real**: "$25 holds the slot. Fully refundable if we have to move you for rain." At booking, on the confirmation and in the portal, an outdoor car is told it is weather-sensitive and shown dry alternatives one tap away. If rain touches the booking, cancelling is a full refund at any time.
 - **Owner's daily tool**: "Needs you" comes with a drafted reply (send in one tap), exact metrics (messages, hours, no-shows recovered, revenue), "Weather moves this week", a waitlist that offers freed slots, and "Today's run" with drive times.
+- **A palette that follows the weather**: the app is warm fern and paper on a dry day and cools to an overcast grey-blue on a wet one, with a thin pearl-paint sheen (teal to rose, like a freshly sealed panel) as its signature. Press Storm and watch the whole app change. Every colour is checked for contrast in both moods.
 - **Neighbour deals**: route-density pricing. When a slot sits next to another job in the same area, Dario drives less, and the customer gets 50¢ off for every minute he saves. It fills the gaps in his route, cuts his driving, and gives customers a reason to pick the slot that's best for him.
 - **"Where's Bertha?"**: a live van tracker on a map of Portland. Customers watch the van drive to them with a live ETA, so nobody texts "where are you?". Dario can scrub and replay his whole day. Privacy is built in: customers only ever see their own stop named.
 - **"Handled for you"** ledger on Dario's console: messages sent, bookings taken, reschedules, gaps refilled, and a transparent estimate of hours saved. "Needs you" shows only what genuinely needs a human.
@@ -82,7 +83,7 @@ Record at 1440×900 (or a phone-width take for the mobile beat). Open **Demo con
 | 1:05 | Confirmation | Scroll the queue | "Nothing left for anyone to do. Prep note, a one-tap confirm, a rain check, an on-my-way text are already queued." |
 | 1:15 | `/owner` | Show greeting, ledger tiles | "Dario's side. 'Nothing needs you' except one thing that really does: a request he doesn't offer. Everything else is done." |
 | 1:30 | Day sheet | Scroll the route | "His morning sheet: the route, drive times, a water refill before job three, gate codes, all filled in by customers." |
-| 1:45 | **Demo controls → Storm** | Click | "Now heavy rain is forecast for his busiest day." |
+| 1:45 | **Demo controls → Storm** | Click | "Now heavy rain is forecast for his busiest day. Watch the whole app turn to its rain palette." |
 | 1:52 | Messages → Rain filter | Point at rain offers | "Every customer with an outdoor car has been texted the nearest dry times. Covered cars are untouched." |
 | 2:05 | Open a customer link | Tap a dry option | "She picks Thursday. Her reminders move with her. Dario did nothing." |
 | 2:12 | Scroll to **Where's Bertha?** → **Play the day** | Let the van drive | "And instead of texting 'where are you?', she watches Bertha drive to her. Other customers' stops are anonymous." |

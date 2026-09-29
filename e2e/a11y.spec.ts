@@ -94,3 +94,37 @@ test.describe("layout", () => {
     }
   });
 });
+
+test.describe("rain mode (the weather-reactive palette)", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/owner");
+    const open = page.getByRole("button", { name: "Open demo controls" });
+    await open.click();
+    await page.getByRole("button", { name: /Storm hits the busiest outdoor day/ }).click();
+    await expect(page.locator("html")).toHaveAttribute("data-weather", "rain");
+  });
+
+  for (const [name, url] of [["landing", "/"], ["owner", "/owner"], ["booking", "/book?v=suv&s=full&zip=97212&p=driveway"]] as const) {
+    test(`${name} passes the audit in rain mode`, async ({ page }) => {
+      await page.goto(url);
+      await expect(page.locator("html")).toHaveAttribute("data-weather", "rain");
+      await audit(page);
+    });
+  }
+
+  test("the review step and the confirmation pass the audit in rain mode", async ({ page }) => {
+    await page.goto("/book?v=sedan&s=express&zip=97212&p=driveway");
+    await page.getByLabel("Street address").fill("1 Main");
+    await page.getByRole("button", { name: /Continue/ }).click();
+    await page.locator("fieldset button[aria-pressed]:not([disabled])").filter({ hasText: /times/ }).nth(1).click();
+    await page.locator("fieldset button[aria-pressed]").filter({ hasText: /^\d{1,2}:\d{2} [AP]M$/ }).first().click();
+    await page.getByRole("button", { name: /Continue/ }).click();
+    await audit(page);
+    await page.getByLabel("Your name").fill("Rain Ray");
+    await page.getByLabel("Mobile number").fill("5035550100");
+    await page.getByLabel("Email").fill("ray@example.com");
+    await page.getByRole("button", { name: /Book it/ }).click();
+    await expectBooked(page);
+    await audit(page);
+  });
+});

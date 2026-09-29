@@ -110,6 +110,22 @@ Being honest about the boundary of the demo:
 - **Data lives in the visitor's browser** (`localStorage`). Production would move `State` into Postgres; the rules would move with it unchanged, and bookings would gain an exclusion constraint on time ranges.
 - **Seeded customers reply on their own** ("C" to confirm, picking a rain option, claiming a waitlist offer) so that both sides of each flow are visible in a single demo.
 
+## Colour
+
+Every colour is tied to something real in Portland, and the palette reacts to the weather.
+
+| Token | Where it comes from |
+|---|---|
+| Fern / primary | Douglas-fir needles on a wet morning |
+| Paper | Unbleached shop-invoice paper |
+| Sun amber | A rare dry-day sun (and, in rain, sodium streetlights on a wet road) |
+| Rain | The Willamette under cloud |
+| Pearl (`iris-1..4`: teal, azure, violet, Rose City rose) | Pearl paint and water beading on a freshly sealed panel |
+
+- **Pearl sheen, used sparingly:** one gradient headline phrase, a thin bar under the header, the van's stripe, gradient hairlines on the ask box, the booking code and the owner's key tile, and soft glows behind the hero.
+- **Weather-reactive palette.** When it's raining in Portland (today's forecast is wet, or the demo's storm is within two days), `<html data-weather="rain">` switches the CSS variables in `src/index.css`: the warm paper cools to overcast grey-blue, the fir goes to wet-asphalt petrol, rain streaks fall behind the hero, and the header shows the day's forecast. The amber stays. Pressing **Storm** in the demo controls flips the whole app, live.
+- **Accessible by test.** `src/lib/__tests__/palette.test.ts` reads the real tokens and asserts WCAG contrast for every text and background pairing, and for the pearl text, in both moods. Playwright also runs axe audits in rain mode.
+
 ## Tests
 
 ```bash

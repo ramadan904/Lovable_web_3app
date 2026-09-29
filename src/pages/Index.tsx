@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowRight, CalendarCheck, CloudRain, MapPin, Send, Sparkles, Truck, Umbrella } from "lucide-react";
 import { Van } from "@/components/Van";
+import { useWeatherMood } from "@/hooks/useWeatherMood";
 import { WeatherIcon } from "@/components/Weather";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/input";
@@ -21,6 +22,7 @@ export default function Index() {
   const now = useNow();
   const [text, setText] = useState("");
   const [answer, setAnswer] = useState<Inquiry | null>(null);
+  const { mood } = useWeatherMood();
 
   const ask = (e: React.FormEvent) => {
     e.preventDefault();
@@ -46,18 +48,27 @@ export default function Index() {
   return (
     <>
       {/* Hero ------------------------------------------------------------------ */}
-      <section className="border-b bg-gradient-to-b from-fern-soft/70 to-background">
+      <section className="relative isolate overflow-hidden border-b bg-fern-soft/50">
+        <div className="iris-glow pointer-events-none absolute inset-0 -z-10" aria-hidden="true" />
+        {mood === "rain" && (
+          <svg className="pointer-events-none absolute inset-0 -z-10 h-full w-full text-rain opacity-30" aria-hidden="true">
+            {Array.from({ length: 44 }, (_, i) => (
+              <line key={i} x1={`${(i * 23) % 100}%`} y1={`${(i * 17) % 90}%`} x2={`${((i * 23) % 100) - 1}%`} y2={`${((i * 17) % 90) + 6}%`}
+                stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" className="animate-rain" style={{ animationDelay: `${(i % 9) * 170}ms` }} />
+            ))}
+          </svg>
+        )}
         <div className="container grid items-center gap-10 py-12 md:py-16 lg:grid-cols-[1.1fr_0.9fr]">
           <div className="animate-rise-in">
             <p className="chip border-primary/30 bg-card text-primary"><MapPin className="size-3.5" aria-hidden="true" /> {BUSINESS.city} · one van · about 150 rainy days a year</p>
             <h1 className="mt-4 text-4xl font-extrabold leading-[1.05] sm:text-5xl lg:text-6xl">
-              One man, one van, and a lot of rain. <span className="text-fern">Your car still gets clean.</span>
+              One man, one van, and a lot of rain. <span className="iris-text">Your car still gets clean.</span>
             </h1>
             <p className="mt-5 max-w-xl text-lg text-foreground/85">
               {BUSINESS.owner} runs Fernhill alone. He can't answer texts from under a dashboard, and he won't wash your car in a downpour. So Fernhill does the texting, the forecast-watching and the rescheduling for him. Ask below and get a real price, real times, and a rain plan, in seconds.
             </p>
 
-            <form onSubmit={ask} className="mt-7 max-w-xl space-y-3 rounded-lg border bg-card p-4 shadow-lift">
+            <form onSubmit={ask} className="iris-border mt-7 max-w-xl space-y-3 rounded-lg p-4 shadow-lift">
               <label htmlFor="ask" className="flex items-center gap-2 text-sm font-bold"><Sparkles className="size-4 text-sun-ink" aria-hidden="true" /> Ask the way you'd text a friend</label>
               <Textarea id="ask" rows={2} value={text} onChange={(e) => { setText(e.target.value); setAnswer(null); }} placeholder="My dog wrecked my Outback. I'm in Sellwood. Friday morning?" />
               <div className="flex flex-wrap items-center gap-2">

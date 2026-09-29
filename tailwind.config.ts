@@ -33,6 +33,7 @@ export default {
         "rise-in": { from: { opacity: "0", transform: "translateY(10px)" }, to: { opacity: "1", transform: "translateY(0)" } },
         "fade-in": { from: { opacity: "0" }, to: { opacity: "1" } },
         drive: { from: { transform: "translateX(-8%)" }, to: { transform: "translateX(108%)" } },
+        "iris-drift": { from: { backgroundPosition: "0% 50%" }, to: { backgroundPosition: "100% 50%" } },
         rain: { from: { transform: "translateY(-20%)", opacity: "0" }, "20%": { opacity: "1" }, to: { transform: "translateY(120%)", opacity: "0" } },
       },
       animation: {

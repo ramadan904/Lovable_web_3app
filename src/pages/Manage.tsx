@@ -101,6 +101,7 @@ export default function Manage() {
     <div className="container max-w-4xl py-8 md:py-12">
       {isNew && active && (
         <div className="mb-8 overflow-hidden rounded-lg bg-primary text-primary-foreground shadow-lift animate-rise-in">
+          <div className="iris-bar h-1.5" aria-hidden="true" />
           <div className="space-y-6 p-6 md:p-8">
             <div className="flex flex-wrap items-start justify-between gap-5">
               <div className="min-w-0">
@@ -110,7 +111,7 @@ export default function Manage() {
                   {BUSINESS.ownerFirst} and {BUSINESS.van} will be at {job.address}, arriving around {fmtTime(job.startMs)} and finished by about {fmtTime(end)}. Nothing else to do.
                 </p>
               </div>
-              <div className="rounded-md border border-primary-foreground/25 bg-primary-foreground/10 px-5 py-3 text-center">
+              <div className="iris-border rounded-md px-5 py-3 text-center" style={{ "--iris-fill": "hsl(var(--primary))" } as React.CSSProperties}>
                 <p className="text-xs font-semibold uppercase tracking-wider text-primary-foreground/75">Booking code</p>
                 <p className="font-display text-3xl font-extrabold tracking-wider">{job.code}</p>
                 <button type="button" onClick={copyCode} className="mt-1 inline-flex items-center gap-1.5 text-sm font-semibold text-primary-foreground underline underline-offset-4">
