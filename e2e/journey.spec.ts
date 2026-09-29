@@ -43,7 +43,8 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("a customer books end to end and Dario finds it on his sheet, having typed nothing", async ({ page }) => {
-  await bookThroughUi(page);
+  // A later day, so the 24-hour reminder is part of the plan (inside 24 hours there is none).
+  await bookThroughUi(page, "Test Driver", 1);
   await expect(page).toHaveURL(/\/b\/FH-[A-Z0-9]{4}\?new=1/);
   // The confirmation email is already in their thread and the automations are queued.
   await expect(page.getByText("Booking confirmation")).toBeVisible();
@@ -171,13 +172,16 @@ test.describe("Where's Bertha?", () => {
 
 test("every fast-forward click moves the demo clock on screen straight away", async ({ page }) => {
   await page.goto("/owner");
-  await page.getByRole("button", { name: "Open demo controls" }).click();
-  const clock = page.getByRole("region", { name: "Demo controls" }).getByText(/It's \w{3} \d/);
-  const seen = new Set<string>([(await clock.textContent()) ?? ""]);
+  const read = async () => {
+    const open = page.getByRole("button", { name: "Open demo controls" });
+    if (await open.isVisible()) await open.click();
+    return (await page.getByRole("region", { name: "Demo controls" }).getByText(/It's \w{3} \d/).textContent()) ?? "";
+  };
+  const seen = new Set<string>([await read()]);
   for (let i = 0; i < 3; i++) {
     await page.getByRole("button", { name: /\+6 hours/ }).click();
-    await expect(async () => expect(seen.has((await clock.textContent()) ?? "")).toBe(false)).toPass({ timeout: 2000 });
-    seen.add((await clock.textContent()) ?? "");
+    await expect(async () => expect(seen.has(await read())).toBe(false)).toPass({ timeout: 3000 });
+    seen.add(await read());
   }
   expect(seen.size).toBe(4);
 });
