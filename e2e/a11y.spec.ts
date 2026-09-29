@@ -1,75 +1,94 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 
-const TAGS = ["wcag2a", "wcag2aa", "wcag21aa", "best-practice"];
+const wcag = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"];
 
-async function expectAccessible(page: Page) {
-  // Let finite entrances finish (the breathing seal is infinite by design).
-  await page.waitForFunction(() =>
-    document.getAnimations().every((a) => a.playState !== "running" || a.effect?.getComputedTiming().iterations === Infinity),
-  );
-  const { violations } = await new AxeBuilder({ page }).withTags(TAGS).analyze();
-  expect(
-    violations.flatMap((v) => v.nodes.slice(0, 4).map((n) => `${v.id}: ${n.target.join(" ")} — ${n.any[0]?.message ?? n.failureSummary}`)),
-  ).toEqual([]);
+async function audit(page: import("@playwright/test").Page) {
+  const results = await new AxeBuilder({ page }).withTags(wcag).analyze();
+  expect(results.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ")).join(" | ")}`)).toEqual([]);
 }
 
-for (const path of ["/", "/guides", "/login", "/record", "/guide", "/nowhere"]) {
-  test(`no WCAG AA violations on ${path}`, async ({ page }) => {
-    await page.goto(path);
-    await page.waitForLoadState("networkidle");
-    await expectAccessible(page);
+test.beforeEach(async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => localStorage.clear());
+});
+
+test("landing", async ({ page }) => { await page.goto("/"); await audit(page); });
+
+test("landing with an answered inquiry", async ({ page }) => {
+  await page.goto("/");
+  await page.getByLabel(/Ask the way you'd text/).fill("minivan tomorrow morning 97007");
+  await page.getByRole("button", { name: "Get real times" }).click();
+  await expect(page.getByText("Fernhill replied instantly")).toBeVisible();
+  await audit(page);
+});
+
+test("booking: every step", async ({ page }) => {
+  await page.goto("/book");
+  await audit(page);
+  await page.getByRole("radio", { name: /Car/ }).first().check({ force: true });
+  await page.getByRole("radio", { name: /Express Wash/ }).check({ force: true });
+  await page.getByRole("button", { name: /Continue/ }).click();
+  await audit(page);
+  await page.getByLabel("Zip code").fill("97212");
+  await page.getByLabel("Street address").fill("1 Main");
+  await page.getByRole("radio", { name: /^Driveway/ }).check({ force: true });
+  await page.getByRole("button", { name: /Continue/ }).click();
+  await audit(page);
+  await page.locator("fieldset button[aria-pressed]").filter({ hasText: /^\d{1,2}:\d{2} [AP]M$/ }).first().click();
+  await page.getByRole("button", { name: /Continue/ }).click();
+  await audit(page);
+});
+
+for (const tab of ["Day sheet", "Week", "Messages sent", "Inquiries", "Waitlist"]) {
+  test(`owner: ${tab}`, async ({ page }) => {
+    await page.goto("/owner");
+    await page.getByRole("tab", { name: new RegExp(tab) }).click();
+    await audit(page);
   });
 }
 
-test("no WCAG AA violations through the ritual", async ({ page }) => {
-  await page.goto("/begin");
-  await expectAccessible(page);
-  await page.getByText("Receiving a terminal diagnosis").click();
-  await page.getByRole("button", { name: "Continue" }).click();
-  await expect(page.locator('label:has(input[name="guide"])').first()).toBeVisible();
-  await expectAccessible(page);
-  await page.locator('label:has(input[name="guide"])').first().click();
-  await page.getByRole("button", { name: "Continue" }).click();
-  for (const prompt of ["What is ending?", "What are you afraid to lose — or afraid to keep?", "What should your Guide know before you arrive?"]) {
-    await page.getByLabel(prompt).fill("Words.");
-    await page.getByRole("button", { name: /Next question|Continue/ }).click();
+test("owner with demo controls open", async ({ page }) => {
+  await page.goto("/owner");
+  await page.getByRole("button", { name: "Open demo controls" }).click();
+  await audit(page);
+});
+
+test("booking confirmation and manage page", async ({ page }) => {
+  await page.goto("/book?v=sedan&s=express&zip=97212&p=garage");
+  await page.getByLabel("Street address").fill("1 Main");
+  await page.getByRole("button", { name: /Continue/ }).click();
+  await page.locator("fieldset button[aria-pressed]").filter({ hasText: /^\d{1,2}:\d{2} [AP]M$/ }).first().click();
+  await page.getByRole("button", { name: /Continue/ }).click();
+  await page.getByLabel("Your name").fill("A. Person");
+  await page.getByLabel("Mobile number").fill("5035550100");
+  await page.getByLabel("Email").fill("a@example.com");
+  await page.getByRole("button", { name: /Book it/ }).click();
+  await expect(page.getByText("You're booked", { exact: true })).toBeVisible();
+  await audit(page);
+});
+
+test("not found", async ({ page }) => { await page.goto("/nope"); await audit(page); });
+
+test.describe("layout", () => {
+  const routes = ["/", "/book", "/book?v=suv&s=full&zip=97212&p=garage", "/owner", "/nope"];
+  for (const route of routes) {
+    test(`no horizontal page scroll: ${route}`, async ({ page }) => {
+      await page.goto(route);
+      const { sw, cw } = await page.evaluate(() => ({ sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth }));
+      expect(sw).toBeLessThanOrEqual(cw);
+    });
   }
-  await page.getByText("Solo", { exact: true }).click();
-  await page.getByRole("button", { name: "Continue" }).click();
-  await page.getByRole("radio").first().click();
-  await expectAccessible(page);
-  await page.getByRole("button", { name: "Continue" }).click();
-  await expectAccessible(page);
-  await page.getByText("Arrive without a letter").click();
-  await expect(page.getByRole("heading", { name: "Everything is ready." })).toBeVisible();
-  await expectAccessible(page);
-});
 
-test("no WCAG AA violations in a client record, a letter and a Guide's week", async ({ page }) => {
-  await page.goto("/login");
-  await page.getByRole("button", { name: /Enter as Inês/ }).click();
-  await page.waitForURL("**/record");
-  await expect(page.getByRole("heading", { name: "Inês." })).toBeVisible();
-  await expectAccessible(page);
-  await page.goto("/letters/30000000-0000-4000-8000-000000000001");
-  await expect(page.getByText("Take your time. It will stay here.")).toBeVisible();
-  await expectAccessible(page);
-  await page.goto("/login");
-  await page.getByRole("button", { name: /Enter as Mara/ }).click();
-  await page.waitForURL("**/guide");
-  await expect(page.getByRole("heading", { name: "Mara's week" })).toBeVisible();
-  await expectAccessible(page);
-});
-
-test("no WCAG AA violations while moving a session", async ({ page }) => {
-  await page.goto("/login");
-  await page.getByRole("button", { name: /Enter as Inês/ }).click();
-  await page.waitForURL("**/record");
-  await page.getByRole("button", { name: "What happens next" }).first().click();
-  await expectAccessible(page);
-  await page.getByRole("link", { name: "Move this time" }).first().click();
-  await expect(page.getByRole("heading", { name: "Choose a new hour." })).toBeVisible();
-  await page.getByRole("radio").first().click();
-  await expectAccessible(page);
+  test("no horizontal page scroll on the booking calendar step or the owner tabs", async ({ page }) => {
+    await page.goto("/book?v=suv&s=full&zip=97212&p=garage");
+    await page.getByLabel("Street address").fill("1 Main");
+    await page.getByRole("button", { name: /Continue/ }).click();
+    for (const tab of ["Week", "Messages sent", "Inquiries", "Waitlist"]) {
+      await page.goto("/owner");
+      await page.getByRole("tab", { name: new RegExp(tab) }).click();
+      const { sw, cw } = await page.evaluate(() => ({ sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth }));
+      expect(sw, tab).toBeLessThanOrEqual(cw);
+    }
+  });
 });

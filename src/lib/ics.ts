@@ -1,45 +1,27 @@
-/** A calendar file for the held time. Written by hand: small, exact, UTC. */
-export function buildIcs(args: {
-  uid: string;
-  start: Date;
-  end: Date;
-  title: string;
-  description: string;
-}): string {
-  const stamp = (d: Date) => d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
-  const esc = (s: string) => s.replace(/\\/g, "\\\\").replace(/\n/g, "\\n").replace(/,/g, "\\,").replace(/;/g, "\;");
+import { BUSINESS, SERVICES } from "./business";
+import type { Job } from "./model";
+
+const stamp = (ms: number) => new Date(ms).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+const esc = (s: string) => s.replace(/([,;\\])/g, "\\$1").replace(/\n/g, "\\n");
+
+/** A calendar file for the appointment, with a 2-hour alarm. */
+export function icsFor(job: Job): string {
+  const end = job.startMs + job.durationMin * 60_000;
   return [
-    "BEGIN:VCALENDAR",
-    "VERSION:2.0",
-    "PRODID:-//Threshold//Booking Ritual//EN",
-    "CALSCALE:GREGORIAN",
-    "METHOD:PUBLISH",
-    "BEGIN:VEVENT",
-    `UID:${args.uid}@threshold`,
-    `DTSTAMP:${stamp(new Date())}`,
-    `DTSTART:${stamp(args.start)}`,
-    `DTEND:${stamp(args.end)}`,
-    `SUMMARY:${esc(args.title)}`,
-    `DESCRIPTION:${esc(args.description)}`,
-    "TRANSP:OPAQUE",
-    "BEGIN:VALARM",
-    "ACTION:DISPLAY",
-    "DESCRIPTION:Your threshold is tomorrow.",
-    "TRIGGER:-PT24H",
-    "END:VALARM",
-    "END:VEVENT",
-    "END:VCALENDAR",
+    "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Fernhill Mobile Detail//EN", "CALSCALE:GREGORIAN", "BEGIN:VEVENT",
+    `UID:${job.code}@fernhill.app`, `DTSTAMP:${stamp(job.createdAt)}`, `DTSTART:${stamp(job.startMs)}`, `DTEND:${stamp(end)}`,
+    `SUMMARY:${esc(`${SERVICES[job.service].name} · ${BUSINESS.name}`)}`,
+    `LOCATION:${esc(job.address)}`,
+    `DESCRIPTION:${esc(`Booking ${job.code}. ${BUSINESS.owner} comes to you. Manage: fernhill.app/b/${job.code}`)}`,
+    "BEGIN:VALARM", "TRIGGER:-PT2H", "ACTION:DISPLAY", "DESCRIPTION:Fernhill detail today", "END:VALARM", "END:VEVENT", "END:VCALENDAR",
   ].join("\r\n");
 }
 
-export function downloadIcs(filename: string, ics: string) {
-  const blob = new Blob([ics], { type: "text/calendar;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
+export function downloadIcs(job: Job) {
+  const url = URL.createObjectURL(new Blob([icsFor(job)], { type: "text/calendar" }));
   const a = document.createElement("a");
   a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
+  a.download = `fernhill-${job.code}.ics`;
   a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  URL.revokeObjectURL(url);
 }

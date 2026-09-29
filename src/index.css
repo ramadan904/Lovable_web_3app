@@ -3,177 +3,94 @@
 @tailwind utilities;
 
 /*
- * Threshold design tokens.
- * Gravity is the design language: deep charcoal ground, warm bone type,
- * one oxidized-copper accent. Nothing is pure white. Dark is the default.
+ * Fernhill design tokens.
+ * A practical, warm, weather-aware look: paper-white ground, deep fern ink,
+ * sun-amber for the good news, rain-slate for the forecast.
  */
 @layer base {
   :root {
-    --charcoal-950: 36 8% 5%;
-    --charcoal-900: 40 7% 7.5%;
-    --charcoal-850: 40 6% 9.5%;
-    --charcoal-800: 38 6% 12%;
-    --charcoal-700: 36 5% 17%;
-
-    --bone: 40 30% 86%;
-    --bone-dim: 38 12% 64%;
-    --bone-faint: 36 7% 52%;
-    --bone-ghost: 36 6% 26%;
-
-    --copper: 17 44% 54%;
-    --copper-bright: 18 50% 63%;
-    --copper-deep: 16 42% 38%;
-
-    --background: var(--charcoal-900);
-    --foreground: var(--bone);
-    --card: var(--charcoal-850);
-    --card-foreground: var(--bone);
-    --popover: var(--charcoal-800);
-    --popover-foreground: var(--bone);
-    --primary: var(--bone);
-    --primary-foreground: var(--charcoal-900);
-    --secondary: var(--charcoal-800);
-    --secondary-foreground: var(--bone);
-    --muted: var(--charcoal-800);
-    --muted-foreground: var(--bone-dim);
-    --accent: var(--copper);
-    --accent-foreground: var(--charcoal-950);
-    --destructive: 8 45% 52%;
-    --destructive-foreground: var(--bone);
-    --border: 38 14% 86% / 0.1;
-    --input: 38 14% 86% / 0.14;
-    --ring: var(--copper);
-    --radius: 0.375rem;
-
-    color-scheme: dark;
+    --background: 42 38% 96%;
+    --foreground: 162 34% 11%;
+    --card: 40 45% 99%;
+    --muted: 40 24% 91%;
+    --muted-foreground: 162 12% 30%;
+    --border: 40 16% 82%;
+    --input: 40 14% 70%;
+    --ring: 160 52% 28%;
+    --primary: 160 46% 21%;
+    --primary-foreground: 42 38% 97%;
+    --fern-soft: 150 32% 90%;
+    --fern-ink: 160 50% 16%;
+    --sun: 40 92% 58%;
+    --sun-soft: 42 95% 89%;
+    --sun-ink: 32 80% 22%;
+    --rain: 208 50% 36%;
+    --rain-soft: 208 60% 93%;
+    --danger: 8 62% 40%;
+    --danger-soft: 8 70% 94%;
+    --radius: 1rem;
+    color-scheme: light;
   }
 
-  * {
-    @apply border-border;
-  }
+  * { @apply border-border; }
+
+  /* Fieldsets default to min-width: min-content, which lets a scroll strip blow out its column. */
+  fieldset { min-width: 0; }
 
   html {
+    scroll-padding-top: 5.5rem;
     -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
     scroll-behavior: smooth;
   }
 
   body {
-    @apply bg-background text-foreground font-sans;
-    font-feature-settings: "cv11", "ss01", "ss03";
-    letter-spacing: -0.005em;
+    @apply bg-background font-sans text-foreground antialiased;
+    font-size: 1rem;
+    line-height: 1.55;
   }
 
-  h1,
-  h2,
-  h3,
-  .font-serif {
-    font-family: theme("fontFamily.serif");
-    font-weight: 400;
-    letter-spacing: -0.012em;
-  }
+  h1, h2, h3, h4 { @apply font-display tracking-tight; }
 
-  ::selection {
-    background: hsl(var(--copper) / 0.35);
-    color: hsl(var(--bone));
-  }
+  :focus-visible { outline: 3px solid hsl(var(--sun)); outline-offset: 2px; border-radius: 6px; }
 
-  /* A single, considered focus language: a copper hairline with breathing room. */
-  :focus-visible {
-    outline: 1px solid hsl(var(--copper));
-    outline-offset: 3px;
-    border-radius: 2px;
-  }
-
-  input::placeholder,
-  textarea::placeholder {
-    color: hsl(var(--bone-faint));
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    *,
-    *::before,
-    *::after {
-      animation-duration: 1ms !important;
-      animation-delay: 0ms !important;
-      transition-duration: 1ms !important;
-      scroll-behavior: auto !important;
-    }
-  }
+  ::selection { background: hsl(var(--sun) / 0.5); }
 }
 
 @layer components {
-  .eyebrow {
-    @apply font-sans text-[0.6875rem] uppercase tracking-ritual text-bone-faint;
-  }
+  /*
+   * A bare `grid` gets one shrinkable column. Without this, a responsive grid such as
+   * `md:grid-cols-3` has an implicit auto column on phones that grows to its widest child.
+   * Tailwind's grid-cols-* utilities still win at their breakpoints.
+   */
+  .grid { grid-template-columns: minmax(0, 1fr); }
 
-  .hairline {
-    @apply h-px w-full bg-gradient-to-r from-transparent via-bone/15 to-transparent;
-  }
+  .card { @apply rounded-lg border bg-card shadow-card; }
+  .eyebrow { @apply text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground; }
+  .chip { @apply inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold; }
 
-  .copper-line {
-    background: linear-gradient(
-      90deg,
-      transparent,
-      hsl(var(--copper-deep) / 0.6) 18%,
-      hsl(var(--copper-bright)) 50%,
-      hsl(var(--copper-deep) / 0.6) 82%,
-      transparent
-    );
+  /* Drive time on the calendar: hatched, so it always reads as "on the road". */
+  .hatch {
+    background-image: repeating-linear-gradient(135deg, hsl(var(--foreground) / 0.16) 0 2px, transparent 2px 7px);
+    background-color: hsl(var(--muted));
   }
-
-  /* Light seeping under a closed door. */
-  .threshold-glow {
-    background: radial-gradient(
-      60% 100% at 50% 0%,
-      hsl(var(--copper) / 0.22),
-      hsl(var(--copper) / 0.06) 40%,
-      transparent 75%
-    );
+  .hatch-refill {
+    background-image: repeating-linear-gradient(45deg, hsl(var(--rain) / 0.35) 0 2px, transparent 2px 7px);
+    background-color: hsl(var(--rain-soft));
   }
-
-  .skeleton {
-    background: linear-gradient(
-      90deg,
-      hsl(var(--charcoal-800)) 0%,
-      hsl(var(--charcoal-700) / 0.8) 50%,
-      hsl(var(--charcoal-800)) 100%
-    );
-    background-size: 200% 100%;
-    @apply animate-shimmer rounded-sm;
+  .road {
+    background-image: linear-gradient(90deg, hsl(var(--foreground) / 0.5) 50%, transparent 50%);
+    background-size: 24px 2px;
+    background-repeat: repeat-x;
+    background-position: 0 50%;
   }
+}
 
-  /* Hatched band used everywhere a buffer is drawn: time held for no one. */
-  .buffer-hatch {
-    background-image: repeating-linear-gradient(
-      -45deg,
-      hsl(var(--copper) / 0.28) 0 1px,
-      transparent 1px 7px
-    );
-    background-color: hsl(var(--copper) / 0.05);
-  }
-
-  .grain::after {
-    content: "";
-    position: fixed;
-    inset: 0;
-    pointer-events: none;
-    z-index: 60;
-    opacity: 0.035;
-    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
-  }
-
-  .text-balance {
-    text-wrap: balance;
-  }
-
-  .text-pretty {
-    text-wrap: pretty;
-  }
-
-  .quiet-scroll {
-    scrollbar-width: thin;
-    scrollbar-color: hsl(var(--bone-ghost)) transparent;
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
   }
 }

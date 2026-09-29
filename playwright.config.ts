@@ -3,6 +3,7 @@ import { defineConfig, devices } from "@playwright/test";
 /**
  * End-to-end tests run against the seeded in-browser demo, so they need no backend.
  * Locally, point PW_CHROMIUM_PATH at an existing Chromium to skip the download.
+ * The business runs on Portland time; the two projects use other timezones to prove it.
  */
 export default defineConfig({
   testDir: "e2e",
@@ -24,6 +25,5 @@ export default defineConfig({
     url: "http://127.0.0.1:4173",
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
-    env: { VITE_SUPABASE_URL: "", VITE_SUPABASE_PUBLISHABLE_KEY: "" },
   },
 });
