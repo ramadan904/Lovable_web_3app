@@ -2,6 +2,9 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
 
+// Where the app is hosted, for the share card and canonical link in index.html. Override with VITE_SITE_URL.
+process.env.VITE_SITE_URL ??= "https://ramadan904.github.io/Lovable_web_3app";
+
 // `vite build --mode artifact` produces one self-contained bundle (see scripts/make-artifact.mjs).
 export default defineConfig(({ mode }) => {
   const artifact = mode === "artifact";

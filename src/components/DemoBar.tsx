@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { Clock4, CloudLightning, Play, FastForward, Moon, RotateCcw, SunMedium, FlaskConical, UserX, X } from "lucide-react";
+import { Clock4, CloudLightning, Globe, Play, FastForward, Moon, RotateCcw, SunMedium, FlaskConical, UserX, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { useNow } from "@/hooks/useNow";
 import { actions, useStore } from "@/lib/store";
 import { useStory, storyStore } from "@/lib/story";
+import { setLiveWeather, useLiveStatus } from "@/lib/weather";
 import { HOUR, fmtDay, fmtDate, fmtStamp } from "@/lib/time";
 
 /** The controls that make a week of a small business watchable in a minute. */
@@ -14,6 +15,7 @@ export function DemoBar() {
   const state = useStore();
   const shifted = Math.round(state.clockOffsetMs / HOUR);
   const story = useStory();
+  const liveWx = useLiveStatus();
 
   /** On phones the panel covers half the screen, so it gets out of the way after each action. */
   const done = () => {
@@ -99,6 +101,16 @@ export function DemoBar() {
           <Button variant="outline" size="sm" className="border-background/30 bg-transparent text-background hover:bg-background/10 hover:text-background" onClick={() => { done(); actions.reset(); toast("Demo reset to a fresh week"); }}>
             <RotateCcw /> Reset
           </Button>
+        </div>
+        <div>
+          <Button variant="outline" size="sm" aria-pressed={liveWx.state === "live" || liveWx.state === "loading"} disabled={liveWx.state === "loading"} className="w-full border-background/30 bg-transparent text-background hover:bg-background/10 hover:text-background aria-pressed:bg-background/15" onClick={() => { void setLiveWeather(liveWx.state !== "live"); }}>
+            <Globe /> {liveWx.state === "live" ? "Using the live Portland forecast" : liveWx.state === "loading" ? "Fetching the forecast…" : "Use the live Portland forecast"}
+          </Button>
+          <p className="mt-1 text-xs text-background/70" role="status">
+            {liveWx.state === "live" ? `Real rain chances from Open-Meteo for the next ${liveWx.days} days. Tap again for the steady demo forecast.`
+              : liveWx.state === "failed" ? "Couldn't reach the forecast service, so the demo forecast is still in use."
+              : "Off: a steady demo forecast, so recordings repeat exactly."}
+          </p>
         </div>
         {state.stormDays.length > 0 && <p className="text-xs text-sun">Storm forecast: {state.stormDays.map((d) => fmtDay(new Date(`${d}T20:00:00Z`).getTime())).join(", ")}</p>}
       </div>

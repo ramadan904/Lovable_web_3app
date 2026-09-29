@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { useApplyWeatherMood, useWeatherMood } from "@/hooks/useWeatherMood";
 import { relativeDay, localDate } from "@/lib/time";
 import { useNow } from "@/hooks/useNow";
+import { useLiveStatus } from "@/lib/weather";
 import { DemoBar } from "./DemoBar";
 import { Story } from "./Story";
 import { LogoMark } from "./Van";
@@ -16,6 +17,7 @@ const nav = "rounded-full px-3.5 py-2 text-sm font-semibold text-foreground/80 h
 export function Layout() {
   const { mood, date, forecast } = useWeatherMood();
   const now = useNow();
+  const liveWx = useLiveStatus();
   useApplyWeatherMood(mood);
   return (
     <div className="flex min-h-dvh flex-col">
@@ -31,7 +33,7 @@ export function Layout() {
             </span>
           </Link>
           <div className="hidden items-center gap-2 md:flex" aria-label="Weather in Portland">
-            <span className="text-xs font-semibold text-muted-foreground">{relativeDay(date, localDate(now))}</span>
+            <span className="text-xs font-semibold text-muted-foreground">{relativeDay(date, localDate(now))}{liveWx.state === "live" ? " · live" : ""}</span>
             <WeatherChip f={forecast} />
           </div>
           <nav aria-label="Main" className="flex items-center gap-1">

@@ -73,6 +73,10 @@ His real-world friction, which the build takes on directly:
 
 Put this in the submission text: **open the app, then tap "Watch the 90-second story"**, or add `?story=1` to the link (on GitHub Pages: `.../Lovable_web_3app/#/?story=1`). It is a captioned, nine-step run over the real app (text to booking, the deposit, the owner's morning, a storm, customers moving themselves, the live van map, a running-late text, the result) with Next and Auto-play. It works on a phone and needs no sign-in.
 
+## Before you post
+
+The share card (`public/og.png`) is picked up from the link's page. It uses the address in `VITE_SITE_URL`, which defaults to the GitHub Pages one. If your Lovable link is what you post, set `VITE_SITE_URL` to it in that project's build settings so the preview image and canonical link point there. Paste your link into the LinkedIn Post Inspector or an X draft first to see the card; both cache, so check before you publish.
+
 ## Demo video: 2:40
 
 Record at 1440×900 (or a phone-width take for the mobile beat). Open **Demo controls** first, so viewers see where the storm button lives. Click **Reset** right before recording for a fresh week.

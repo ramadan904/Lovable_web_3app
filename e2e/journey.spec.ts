@@ -666,3 +666,55 @@ test.describe("The guided story", () => {
     await expect(page.getByRole("button", { name: "Open demo controls" })).toBeVisible();
   });
 });
+
+test.describe("Resilience and the live forecast", () => {
+  /** A forecast reply that says heavy rain every day around now. */
+  const openMeteo = (rain: number) => {
+    const days: string[] = [];
+    for (let i = -2; i < 17; i++) days.push(new Date(Date.now() + i * 86_400_000).toISOString().slice(0, 10));
+    return { daily: { time: days, precipitation_probability_max: days.map(() => rain), temperature_2m_max: days.map(() => 52) } };
+  };
+
+  test("the live forecast can be switched on (real rain chances flow through) and off again", async ({ page }) => {
+    await page.route("**/api.open-meteo.com/**", (route) => route.fulfill({ json: openMeteo(91) }));
+    await page.goto("/");
+    const open = page.getByRole("button", { name: "Open demo controls" });
+    if (await open.isVisible()) await open.click();
+    await expect(page.getByText(/Off: a steady demo forecast/)).toBeVisible();
+    await page.getByRole("button", { name: "Use the live Portland forecast" }).click();
+    await expect(page.getByText(/Real rain chances from Open-Meteo for the next \d+ days/)).toBeVisible();
+    await expect(page.locator("html")).toHaveAttribute("data-weather", "rain"); // 91% today: the whole app is in its rain mood
+    await page.getByRole("button", { name: "Using the live Portland forecast" }).click();
+    await expect(page.getByText(/Off: a steady demo forecast/)).toBeVisible();
+  });
+
+  test("if the forecast service is unreachable, the demo carries on and says why", async ({ page }) => {
+    await page.route("**/api.open-meteo.com/**", (route) => route.abort());
+    await page.goto("/");
+    const open = page.getByRole("button", { name: "Open demo controls" });
+    if (await open.isVisible()) await open.click();
+    await page.getByRole("button", { name: "Use the live Portland forecast" }).click();
+    await expect(page.getByText(/Couldn't reach the forecast service/)).toBeVisible();
+    await page.goto("/book");
+    await expect(page.getByRole("heading", { name: "Real times. Rain handled. No texting back and forth." })).toBeVisible();
+  });
+
+  test("damaged saved data is dropped quietly, and a real crash shows a way back rather than a blank page", async ({ page }) => {
+    // Saved data that isn't the right shape: reseeded without a fuss.
+    await page.evaluate((key) => localStorage.setItem(key, JSON.stringify({ v: 1, seededAt: Date.now(), clockOffsetMs: 0, jobs: "oops" })), STORE_KEY);
+    await page.goto("/owner");
+    await expect(page.getByRole("heading", { name: "Handled for you this week" })).toBeVisible();
+
+    // Data that looks right but is missing a customer: the page can't draw it, so the boundary catches it.
+    await page.evaluate((key) => {
+      const s = JSON.parse(localStorage.getItem(key)!);
+      delete s.jobs[0].customer;
+      localStorage.setItem(key, JSON.stringify(s));
+    }, STORE_KEY);
+    page.on("pageerror", () => {});
+    await page.goto("/owner");
+    await expect(page.getByRole("heading", { name: "Bertha hit a pothole" })).toBeVisible();
+    await page.getByRole("button", { name: "Start a fresh week" }).click();
+    await expect(page.getByRole("heading", { name: "Handled for you this week" })).toBeVisible();
+  });
+});

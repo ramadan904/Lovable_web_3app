@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect } from "react";
 import { BrowserRouter, HashRouter, MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Layout } from "@/components/Layout";
 import { PageLoading } from "@/components/PageLoading";
 import { Toaster } from "@/components/ui/sonner";
@@ -26,6 +27,7 @@ function ScrollToTop() {
 const Router = import.meta.env.VITE_ROUTER === "memory" ? MemoryRouter : import.meta.env.VITE_ROUTER === "hash" ? HashRouter : BrowserRouter;
 
 const App = () => (
+  <ErrorBoundary>
   <Router>
     <Toaster />
     <ScrollToTop />
@@ -42,6 +44,7 @@ const App = () => (
       </Routes>
     </Suspense>
   </Router>
+  </ErrorBoundary>
 );
 
 export default App;
