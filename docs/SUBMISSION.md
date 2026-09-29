@@ -76,15 +76,14 @@ Record at 1440×900 (or a phone-width take for the mobile beat). Open **Demo con
 | Time | Screen | Do | Say |
 |---|---|---|---|
 | 0:00 | Landing hero | Let it sit | "This is Dario, a one-van car detailer in Portland. He loses evenings to texting, rainouts and no-shows. This is Fernhill, built with Lovable." |
-| 0:12 | Ask box | Tap the Subaru example → **Get real times** | "A customer writes the way they'd text a friend. Fernhill reads it, prices it, checks Dario's drive time, and offers three real slots. In seconds." |
-| 0:28 | Tap a time → Where step | Fill address, pick **Driveway** | "It knows her Outback with dog hair takes two and a half hours. She says the car is outside, and that matters later." |
-| 0:45 | When step | Point at day tiles and rain chips | "Only reachable times. Wet days are flagged; a dry day is recommended." |
-| 0:47 | When step, Southeast zip | Point at the "−$10" times | "And when Dario's already in her neighbourhood, the slot next to that job is cheaper. Every minute he doesn't drive is fifty cents off." |
-| 0:55 | You step → **Book** | Name, phone, email → Book | "A twenty-five dollar deposit holds it. Confirmed instantly." |
-| 1:05 | Confirmation | Scroll the queue | "Nothing left for anyone to do. Prep note, a one-tap confirm, a rain check, an on-my-way text are already queued." |
-| 1:15 | `/owner` | Show greeting, ledger tiles | "Dario's side. 'Nothing needs you' except one thing that really does: a request he doesn't offer. Everything else is done." |
-| 1:30 | Day sheet | Scroll the route | "His morning sheet: the route, drive times, a water refill before job three, gate codes, all filled in by customers." |
-| 1:45 | **Demo controls → Storm** | Click | "Now heavy rain is forecast for his busiest day. Watch the whole app turn to its rain palette." |
+| 0:12 | Ask box | Type "My dog wrecked my Outback. I'm in Sellwood. Friday morning?" → **Get real times** | "A customer writes the way they'd text a friend. Fernhill reads it and shows what it understood: the car, the service, the pet-hair add-on, the neighbourhood, the day. Then real times, dry-forecast, with Dario's drive already counted." |
+| 0:30 | Tap **Continue to booking** | Point at the banner and the pre-filled zip | "The form is already filled in. It even worked out her zip from 'Sellwood', and says it guessed. She only adds a street and where the car parks." |
+| 0:42 | Where → When | Pick **Driveway**; point at "Show dry days only" and the "−$10" times | "Outdoors matters, so wet days are hidden. And where Dario's already in her neighbourhood, the slot next to that job is cheaper: fifty cents off for every minute he doesn't drive." |
+| 0:55 | Review & pay | Scroll the summary and price breakdown | "Before she pays: service, car, address, that a driveway is weather-sensitive, the exact time window, and the price with the twenty-five dollar deposit split out. Fully refundable if we have to move her for rain." |
+| 1:08 | Confirmation | Point at the code, Add to calendar, Reschedule, portal link | "Confirmed. A booking code, one-tap calendar, reschedule or cancel on her own, and a link back to her booking page. Prep note, confirmation reminder and on-my-way text are already queued." |
+| 1:20 | `/owner` | Show greeting, ledger tiles | "Dario's side. 'Nothing needs you' except one thing that really does: a request he doesn't offer. Everything else is done." |
+| 1:33 | Day sheet | Scroll the route | "His morning sheet: the route, drive times, a water refill before job three, gate codes, all filled in by customers." |
+| 1:46 | **Demo controls → Storm** | Click | "Now heavy rain is forecast for his busiest day. Watch the whole app turn to its rain palette." |
 | 1:52 | Messages → Rain filter | Point at rain offers | "Every customer with an outdoor car has been texted the nearest dry times. Covered cars are untouched." |
 | 2:05 | Open a customer link | Tap a dry option | "She picks Thursday. Her reminders move with her. Dario did nothing." |
 | 2:12 | Scroll to **Where's Bertha?** → **Play the day** | Let the van drive | "And instead of texting 'where are you?', she watches Bertha drive to her. Other customers' stops are anonymous." |
