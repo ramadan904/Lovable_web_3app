@@ -1,0 +1,397 @@
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { ArrowLeft, ArrowRight, Check, Clock, CloudRain, LockKeyhole, MapPin, Umbrella } from "lucide-react";
+import { toast } from "sonner";
+import { SlotPicker } from "@/components/SlotPicker";
+import { Button } from "@/components/ui/button";
+import { Input, Textarea } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useNow } from "@/hooks/useNow";
+import {
+  ADDONS, DEPOSIT_CENTS, PARKING, SERVICES, VEHICLES, ZONES, dollars, hoursLabel, isCovered, quote, zoneForZip,
+  type AddonKey, type Parking, type ServiceKey, type VehicleKind,
+} from "@/lib/business";
+import { BookingError } from "@/lib/model";
+import { validate } from "@/lib/engine";
+import { actions, getState, nowMs } from "@/lib/store";
+import { fmtDayLong, fmtTime } from "@/lib/time";
+import { cn } from "@/lib/utils";
+
+const STEPS = ["Your car", "Where", "When", "You"] as const;
+
+interface Form {
+  vehicle: VehicleKind | null;
+  label: string;
+  service: ServiceKey | null;
+  addons: AddonKey[];
+  zip: string;
+  address: string;
+  parking: Parking | null;
+  gateCode: string;
+  notes: string;
+  startMs: number | null;
+  name: string;
+  phone: string;
+  email: string;
+}
+
+function initialForm(p: URLSearchParams): { form: Form; step: number } {
+  const v = p.get("v");
+  const s = p.get("s");
+  const vehicle = v && v in VEHICLES ? (v as VehicleKind) : null;
+  const service = s && s in SERVICES ? (s as ServiceKey) : null;
+  const addons = (p.get("a") ?? "").split(",").filter((a): a is AddonKey => a in ADDONS);
+  const zip = p.get("zip") ?? "";
+  const pk = p.get("p");
+  const parking = pk && pk in PARKING ? (pk as Parking) : null;
+  const t = Number(p.get("t")) || null;
+  const form: Form = { vehicle, label: "", service, addons, zip, address: "", parking, gateCode: "", notes: "", startMs: t, name: "", phone: "", email: "" };
+  const step = !vehicle || !service ? 0 : 1;
+  return { form, step };
+}
+
+function RadioCard({ name, value, checked, onChange, children, className }: { name: string; value: string; checked: boolean; onChange: () => void; children: React.ReactNode; className?: string }) {
+  return (
+    <label className={cn("relative block cursor-pointer", className)}>
+      <input type="radio" name={name} value={value} checked={checked} onChange={onChange} className="peer sr-only" />
+      <span className="flex h-full flex-col gap-1 rounded-lg border bg-card p-4 transition-colors peer-checked:border-primary peer-checked:bg-fern-soft peer-checked:shadow-card peer-focus-visible:outline peer-focus-visible:outline-[3px] peer-focus-visible:outline-offset-2 peer-focus-visible:outline-sun hover:border-foreground/50">
+        {children}
+      </span>
+      <span className="pointer-events-none absolute right-3 top-3 hidden size-6 items-center justify-center rounded-full bg-primary text-primary-foreground peer-checked:flex" aria-hidden="true">
+        <Check className="size-3.5" />
+      </span>
+    </label>
+  );
+}
+
+function Field({ id, label, hint, error, children }: { id: string; label: string; hint?: string; error?: string | null; children: React.ReactNode }) {
+  return (
+    <div className="space-y-1.5">
+      <Label htmlFor={id}>{label}</Label>
+      {children}
+      {hint && !error && <p id={`${id}-hint`} className="text-sm text-muted-foreground">{hint}</p>}
+      {error && <p id={`${id}-err`} role="alert" className="text-sm font-medium text-danger">{error}</p>}
+    </div>
+  );
+}
+
+export default function Book() {
+  const [params] = useSearchParams();
+  const init = useMemo(() => initialForm(params), []); // eslint-disable-line react-hooks/exhaustive-deps
+  const [form, setForm] = useState<Form>(init.form);
+  const [step, setStep] = useState(init.step);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [joining, setJoining] = useState(false);
+  const [waitlisted, setWaitlisted] = useState(false);
+  const now = useNow();
+  const nav = useNavigate();
+  const heading = useRef<HTMLHeadingElement>(null);
+  // Changing the plan (car, service, place) can invalidate a chosen time, so it clears.
+  const PLAN_KEYS: (keyof Form)[] = ["vehicle", "service", "addons", "zip", "parking"];
+  const set = <K extends keyof Form>(k: K, v: Form[K]) => {
+    setForm((f) => ({ ...f, [k]: v, ...(PLAN_KEYS.includes(k) ? { startMs: null } : {}) }));
+    setError(null);
+  };
+
+  useEffect(() => { heading.current?.focus(); }, [step]);
+
+  const zone = form.zip.length >= 5 ? zoneForZip(form.zip) : null;
+  const zipBad = form.zip.length >= 5 && !zone;
+  const q = form.vehicle && form.service ? quote(form.vehicle, form.service, form.addons, zone) : null;
+  const covered = form.parking ? isCovered(form.parking) : false;
+
+  // A time carried in from a link (or picked earlier) must still be open.
+  useEffect(() => {
+    if (step === 2 && form.startMs && q && zone && validate(getState(), { startMs: form.startMs, durationMin: q.durationMin, zone }, nowMs()) !== null) {
+      setForm((f) => ({ ...f, startMs: null }));
+    }
+  }, [step]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const next = () => {
+    if (step === 0) {
+      if (!form.vehicle || !form.service) return setError("Pick what you drive and the service you'd like.");
+    }
+    if (step === 1) {
+      if (!zone) return setError(zipBad ? "That zip is outside our service area." : "Enter your 5-digit zip so we can check the drive.");
+      if (!form.address.trim()) return setError("Add the street address where the car will be.");
+      if (!form.parking) return setError("Tell us where the car will be parked.");
+    }
+    if (step === 2 && !form.startMs) return setError("Pick a time to continue.");
+    setError(null);
+    setStep(step + 1);
+  };
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.name.trim() || !form.phone.trim() || !/^\S+@\S+\.\S+$/.test(form.email)) {
+      return setError("We need your name, a mobile number for texts, and a valid email.");
+    }
+    if (!form.vehicle || !form.service || !form.parking || !form.startMs) return;
+    setBusy(true);
+    window.setTimeout(() => {
+      try {
+        const job = actions.book({
+          customer: { name: form.name, phone: form.phone, email: form.email },
+          vehicle: { kind: form.vehicle!, label: form.label.trim() || VEHICLES[form.vehicle!].name.toLowerCase() },
+          service: form.service!, addons: form.addons, zip: form.zip, address: form.address, parking: form.parking!,
+          access: { gateCode: form.gateCode, notes: form.notes }, startMs: form.startMs!,
+        });
+        nav(`/b/${job.code}?new=1`);
+      } catch (err) {
+        setBusy(false);
+        if (err instanceof BookingError && (err.code === "slot_taken" || err.code === "too_soon")) {
+          set("startMs", null);
+          setStep(2);
+          toast.error("That time was just taken", { description: "Someone booked it while you were typing. Here's what's open now." });
+        } else if (err instanceof BookingError) {
+          setError(err.message);
+        } else throw err;
+      }
+    }, 450);
+  };
+
+  const joinWaitlist = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.name.trim() || !form.phone.trim() || !/^\S+@\S+\.\S+$/.test(form.email)) return setError("Add your name, mobile number and email to join the waitlist.");
+    if (!form.vehicle || !form.service || !form.parking) return;
+    actions.joinWaitlist({
+      customer: { name: form.name, phone: form.phone, email: form.email },
+      vehicle: { kind: form.vehicle, label: form.label.trim() || VEHICLES[form.vehicle].name.toLowerCase() },
+      service: form.service, addons: form.addons, zip: form.zip, address: form.address, parking: form.parking,
+    });
+    setWaitlisted(true);
+    setError(null);
+  };
+
+  const toggleAddon = (a: AddonKey) => set("addons", form.addons.includes(a) ? form.addons.filter((x) => x !== a) : [...form.addons, a]);
+
+  return (
+    <div className="container py-8 md:py-12">
+      <div className="mb-8 max-w-2xl">
+        <p className="eyebrow">Book a detail</p>
+        <h1 className="mt-1 text-3xl font-extrabold md:text-4xl">Real times. Rain handled. No texting back and forth.</h1>
+      </div>
+
+      <ol className="mb-8 grid grid-cols-4 gap-2" aria-label="Progress">
+        {STEPS.map((label, i) => (
+          <li key={label} aria-current={i === step ? "step" : undefined}>
+            <button
+              type="button"
+              disabled={i > step}
+              onClick={() => setStep(i)}
+              className={cn("flex w-full flex-col gap-1.5 text-left disabled:cursor-default", i > step && "opacity-60")}
+            >
+              <span className={cn("h-1.5 rounded-full transition-colors", i < step ? "bg-primary" : i === step ? "bg-sun" : "bg-border")} />
+              <span className="text-xs font-semibold sm:text-sm"><span className="text-muted-foreground">{i + 1}. </span>{label}</span>
+            </button>
+          </li>
+        ))}
+      </ol>
+
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_22rem]">
+        <form onSubmit={step === 3 ? submit : (e) => { e.preventDefault(); next(); }} className="space-y-8" noValidate>
+          <h2 ref={heading} tabIndex={-1} className="text-2xl font-bold focus:outline-none">
+            {["What are we cleaning?", "Where do we find you?", "When suits you?", "Last step: your details"][step]}
+          </h2>
+
+          {step === 0 && (
+            <div className="space-y-8">
+              <fieldset>
+                <legend className="mb-3 text-sm font-semibold">What do you drive?</legend>
+                <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                  {Object.values(VEHICLES).map((v) => (
+                    <RadioCard key={v.key} name="vehicle" value={v.key} checked={form.vehicle === v.key} onChange={() => set("vehicle", v.key)}>
+                      <span className="font-display text-lg font-bold">{v.name}</span>
+                      <span className="text-sm text-muted-foreground">{v.examples}</span>
+                    </RadioCard>
+                  ))}
+                </div>
+              </fieldset>
+              <Field id="label" label="What does it look like? (optional)" hint="So Dario finds the right car in a row of them.">
+                <Input id="label" value={form.label} onChange={(e) => set("label", e.target.value)} placeholder="Grey Subaru Outback" maxLength={40} aria-describedby="label-hint" />
+              </Field>
+              <fieldset>
+                <legend className="mb-3 text-sm font-semibold">What does it need?</legend>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {Object.values(SERVICES).map((s) => {
+                    const sq = form.vehicle ? quote(form.vehicle, s.key, [], null) : null;
+                    return (
+                      <RadioCard key={s.key} name="service" value={s.key} checked={form.service === s.key} onChange={() => set("service", s.key)}>
+                        <span className="flex items-baseline justify-between gap-3 pr-7">
+                          <span className="font-display text-lg font-bold">{s.name}</span>
+                          <span className="font-bold">{sq ? dollars(sq.serviceCents) : `from ${dollars(s.baseCents)}`}</span>
+                        </span>
+                        <span className="text-sm text-foreground/80">{s.line}</span>
+                        <span className="mt-1 flex items-center gap-1.5 text-sm font-medium text-muted-foreground"><Clock className="size-3.5" aria-hidden="true" />{sq ? `About ${hoursLabel(sq.durationMin)}` : `From ${hoursLabel(s.baseMin)}`}</span>
+                      </RadioCard>
+                    );
+                  })}
+                </div>
+              </fieldset>
+              <fieldset>
+                <legend className="mb-1 text-sm font-semibold">Anything extra?</legend>
+                <p className="mb-3 text-sm text-muted-foreground">Add-ons change the time, so the calendar on the next steps stays honest.</p>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {Object.values(ADDONS).map((a) => (
+                    <label key={a.key} className="flex cursor-pointer items-start gap-3 rounded-lg border bg-card p-3.5 has-[:checked]:border-primary has-[:checked]:bg-fern-soft has-[:focus-visible]:outline has-[:focus-visible]:outline-[3px] has-[:focus-visible]:outline-sun">
+                      <input type="checkbox" checked={form.addons.includes(a.key)} onChange={() => toggleAddon(a.key)} className="mt-1 size-4 accent-[hsl(var(--primary))]" />
+                      <span className="flex-1">
+                        <span className="flex justify-between gap-2 font-semibold"><span>{a.name}</span><span>+{dollars(a.cents)}</span></span>
+                        <span className="block text-sm text-muted-foreground">{a.line} · +{a.min} min</span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+            </div>
+          )}
+
+          {step === 1 && (
+            <div className="space-y-6">
+              <div className="grid gap-5 sm:grid-cols-[10rem_1fr]">
+                <Field id="zip" label="Zip code" error={zipBad ? "We don't reach that zip yet. We cover Portland and the westside suburbs." : null}
+                  hint={zone ? undefined : "We'll check the drive from Dario's last job."}>
+                  <Input id="zip" inputMode="numeric" autoComplete="postal-code" maxLength={5} value={form.zip} onChange={(e) => set("zip", e.target.value.replace(/\D/g, ""))} placeholder="97212" aria-describedby={zipBad ? "zip-err" : "zip-hint"} aria-invalid={zipBad} />
+                </Field>
+                <Field id="address" label="Street address">
+                  <Input id="address" autoComplete="street-address" value={form.address} onChange={(e) => set("address", e.target.value)} placeholder="3415 NE 15th Ave" />
+                </Field>
+              </div>
+              {zone && (
+                <p className="flex items-start gap-2 rounded-md bg-fern-soft p-3 text-sm text-fern-ink" role="status">
+                  <MapPin className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+                  <span><strong>{ZONES[zone].name}</strong> ({ZONES[zone].areas}). {ZONES[zone].feeCents ? `A ${dollars(ZONES[zone].feeCents)} travel fee applies.` : "No travel fee."}</span>
+                </p>
+              )}
+              <fieldset>
+                <legend className="mb-1 text-sm font-semibold">Where will the car be parked?</legend>
+                <p className="mb-3 text-sm text-muted-foreground">This is how we handle Portland's weather for you.</p>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {(Object.keys(PARKING) as Parking[]).map((k) => (
+                    <RadioCard key={k} name="parking" value={k} checked={form.parking === k} onChange={() => set("parking", k)}>
+                      <span className="flex items-center gap-2 pr-7 font-display text-lg font-bold">
+                        {PARKING[k].covered ? <Umbrella className="size-4 text-fern" aria-hidden="true" /> : <CloudRain className="size-4 text-rain" aria-hidden="true" />}
+                        {PARKING[k].name}
+                      </span>
+                      <span className="text-sm text-muted-foreground">{PARKING[k].line}</span>
+                    </RadioCard>
+                  ))}
+                </div>
+              </fieldset>
+              <div className="grid gap-5 sm:grid-cols-2">
+                <Field id="gate" label="Gate or door code (optional)" hint="Only Dario sees this, and only on the day.">
+                  <Input id="gate" value={form.gateCode} onChange={(e) => set("gateCode", e.target.value)} placeholder="#4471" aria-describedby="gate-hint" autoComplete="off" />
+                </Field>
+                <Field id="notes" label="Anything Dario should know? (optional)" hint="Dogs, parking, where the key is.">
+                  <Textarea id="notes" value={form.notes} onChange={(e) => set("notes", e.target.value)} className="min-h-12" rows={2} aria-describedby="notes-hint" />
+                </Field>
+              </div>
+            </div>
+          )}
+
+          {step === 2 && q && zone && form.parking && (
+            <div className="space-y-6">
+              <SlotPicker
+                durationMin={q.durationMin} zone={zone} parking={form.parking} now={now} value={form.startMs}
+                onChange={(ms) => set("startMs", ms)}
+                whenEmpty={<WaitlistForm form={form} set={set} onSubmit={joinWaitlist} done={waitlisted} error={error} />}
+              />
+              {!waitlisted && (
+                <div className="rounded-lg border bg-card p-4">
+                  <button type="button" className="font-semibold text-fern underline underline-offset-4" onClick={() => setJoining((j) => !j)} aria-expanded={joining}>
+                    Nothing suits? Join the waitlist
+                  </button>
+                  {joining && <div className="mt-4"><WaitlistForm form={form} set={set} onSubmit={joinWaitlist} done={waitlisted} error={error} /></div>}
+                </div>
+              )}
+              {waitlisted && <p role="status" className="rounded-md bg-fern-soft p-4 font-semibold text-fern-ink">You're on the waitlist. If a slot frees up that fits, you'll get a text with a two-hour window to claim it.</p>}
+            </div>
+          )}
+
+          {step === 3 && q && form.startMs && (
+            <div className="space-y-6">
+              <div className="grid gap-5 sm:grid-cols-2">
+                <Field id="name" label="Your name"><Input id="name" autoComplete="name" value={form.name} onChange={(e) => set("name", e.target.value)} /></Field>
+                <Field id="phone" label="Mobile number" hint="For your reminders. Reply C to confirm, or tap the link."><Input id="phone" type="tel" autoComplete="tel" value={form.phone} onChange={(e) => set("phone", e.target.value)} placeholder="(503) 555-0100" aria-describedby="phone-hint" /></Field>
+              </div>
+              <Field id="email" label="Email"><Input id="email" type="email" autoComplete="email" value={form.email} onChange={(e) => set("email", e.target.value)} /></Field>
+
+              <div className="card space-y-3 p-5">
+                <h3 className="flex items-center gap-2 text-lg font-bold"><LockKeyhole className="size-4 text-fern" aria-hidden="true" /> {dollars(DEPOSIT_CENTS)} deposit holds your time</h3>
+                <p className="text-sm text-muted-foreground">
+                  It comes off your total. It exists because one no-show costs a solo detailer a whole job, so here's how it works, in plain words:
+                </p>
+                <ul className="list-disc space-y-1 pl-5 text-sm">
+                  <li>Move or cancel free up to 24 hours before. The deposit is refunded or carried over.</li>
+                  <li>We text you the day before. Tap <strong>Confirm</strong> and you're set.</li>
+                  <li>No answer by three hours before? We release the slot to the waitlist and keep the deposit.</li>
+                  <li>Rain on an outdoor job? We move you free, to a dry day you choose.</li>
+                </ul>
+                <p className="rounded-md bg-sun-soft px-3 py-2 text-sm font-medium text-sun-ink">Demo: no card is charged. In production the deposit runs through Stripe.</p>
+              </div>
+            </div>
+          )}
+
+          {error && step !== 2 && <p role="alert" className="rounded-md border border-danger/30 bg-danger-soft px-4 py-3 text-sm font-semibold text-danger">{error}</p>}
+          {error && step === 2 && !joining && <p role="alert" className="rounded-md border border-danger/30 bg-danger-soft px-4 py-3 text-sm font-semibold text-danger">{error}</p>}
+
+          <div className="flex items-center justify-between gap-3 border-t pt-6">
+            {step > 0 ? <Button type="button" variant="ghost" onClick={() => { setError(null); setStep(step - 1); }}><ArrowLeft /> Back</Button> : <Button asChild variant="ghost"><Link to="/"><ArrowLeft /> Home</Link></Button>}
+            {step < 3 ? (
+              <Button type="submit" size="lg">Continue <ArrowRight /></Button>
+            ) : (
+              <Button type="submit" size="lg" variant="sun" disabled={busy}>{busy ? "Booking…" : `Book it · pay ${dollars(DEPOSIT_CENTS)} deposit`}</Button>
+            )}
+          </div>
+        </form>
+
+        <Summary form={form} q={q} zone={zone} covered={covered} />
+      </div>
+    </div>
+  );
+}
+
+function WaitlistForm({ form, set, onSubmit, done, error }: { form: Form; set: <K extends keyof Form>(k: K, v: Form[K]) => void; onSubmit: (e: React.FormEvent) => void; done: boolean; error: string | null }) {
+  if (done) return <p role="status" className="mt-4 font-semibold text-fern-ink">You're on the waitlist. We'll text you when a slot opens.</p>;
+  return (
+    <form onSubmit={onSubmit} className="mt-4 grid gap-3 text-left sm:grid-cols-3" noValidate>
+      <Input aria-label="Your name" placeholder="Your name" value={form.name} onChange={(e) => set("name", e.target.value)} autoComplete="name" />
+      <Input aria-label="Mobile number" placeholder="Mobile number" type="tel" value={form.phone} onChange={(e) => set("phone", e.target.value)} autoComplete="tel" />
+      <Input aria-label="Email" placeholder="Email" type="email" value={form.email} onChange={(e) => set("email", e.target.value)} autoComplete="email" />
+      {error && <p role="alert" className="text-sm font-medium text-danger sm:col-span-3">{error}</p>}
+      <Button type="submit" variant="default" className="sm:col-span-3">Join the waitlist</Button>
+    </form>
+  );
+}
+
+function Summary({ form, q, zone, covered }: { form: Form; q: ReturnType<typeof quote> | null; zone: ReturnType<typeof zoneForZip>; covered: boolean }) {
+  return (
+    <aside aria-label="Your booking" className="lg:sticky lg:top-24 lg:self-start">
+      <div className="card overflow-hidden">
+        <div className="bg-primary px-5 py-4 text-primary-foreground">
+          <p className="eyebrow !text-primary-foreground/70">Your detail</p>
+          <p className="font-display text-xl font-bold">{form.service ? SERVICES[form.service].name : "Choose a service"}</p>
+          <p className="text-sm text-primary-foreground/80">{form.vehicle ? `${form.label || VEHICLES[form.vehicle].name}` : "No car chosen yet"}</p>
+        </div>
+        <div className="space-y-3 p-5 text-sm">
+          {q ? (
+            <>
+              <dl className="space-y-1.5">
+                <div className="flex justify-between"><dt className="text-muted-foreground">{SERVICES[form.service!].name}</dt><dd className="font-semibold">{dollars(q.serviceCents)}</dd></div>
+                {form.addons.map((a) => <div key={a} className="flex justify-between"><dt className="text-muted-foreground">{ADDONS[a].name}</dt><dd className="font-semibold">{dollars(ADDONS[a].cents)}</dd></div>)}
+                {zone && q.feeCents > 0 && <div className="flex justify-between"><dt className="text-muted-foreground">Travel ({ZONES[zone].name})</dt><dd className="font-semibold">{dollars(q.feeCents)}</dd></div>}
+                <div className="flex justify-between border-t pt-2 text-base"><dt className="font-bold">Total</dt><dd className="font-display text-lg font-extrabold">{dollars(q.totalCents)}</dd></div>
+              </dl>
+              <p className="flex items-center gap-2 text-muted-foreground"><Clock className="size-4" aria-hidden="true" /> About {hoursLabel(q.durationMin)} on site</p>
+            </>
+          ) : <p className="text-muted-foreground">Pick your car and a service to see the price and how long it takes.</p>}
+          {form.address && zone && <p className="flex items-start gap-2 text-muted-foreground"><MapPin className="mt-0.5 size-4 shrink-0" aria-hidden="true" /> {form.address}, {ZONES[zone].name}</p>}
+          {form.parking && <p className="flex items-start gap-2 text-muted-foreground">{covered ? <Umbrella className="mt-0.5 size-4 shrink-0" aria-hidden="true" /> : <CloudRain className="mt-0.5 size-4 shrink-0" aria-hidden="true" />} {PARKING[form.parking].name}: {covered ? "rain won't move you" : "we watch the forecast for you"}</p>}
+          {form.startMs && <p className="rounded-md bg-sun-soft px-3 py-2 font-semibold text-sun-ink">{fmtDayLong(form.startMs)} at {fmtTime(form.startMs)}</p>}
+          <p className="text-xs text-muted-foreground">{dollars(DEPOSIT_CENTS)} deposit at booking, applied to your total.</p>
+        </div>
+      </div>
+    </aside>
+  );
+}

@@ -1,170 +1,163 @@
-import { LETTER_SEAL_HOURS } from "./time";
-import type { Session } from "./types";
+// The owner's "nothing to do" machinery. `tick` is safe to call at any time: it
+// does only what is due, in chronological order, and never does anything twice.
+import { CONFIRM_NUDGE_H, RAIN_CHECK_H, RELEASE_H } from "./business";
+import { isRainRisk } from "./engine";
+import { ACTIVE, type Job, type State } from "./model";
+import { chooseRainOption, claimOffer, confirmJob, makeRainOffer, offerBackfill, pushEvent, releaseJob, sendForJob } from "./ops";
+import { HOUR, MIN, fmtDay, fmtTime } from "./time";
 
-/*
- * Everything Threshold does so the Guide doesn't have to.
- *
- * Derived from a session alone, so it is always consistent with the
- * calendar: move a session and its schedule moves; release it and what was
- * pending is withdrawn. Delivery (email) is a separate concern — here we
- * describe what is handled and when.
- */
+export type StepKind = "prep" | "reminder" | "simConfirm" | "nudge" | "release" | "omw" | "complete" | "aftercare";
 
-export type AutomationKind =
-  | "confirmed"
-  | "calendar"
-  | "briefing"
-  | "moved"
-  | "preparation"
-  | "reminder"
-  | "briefing-ready"
-  | "letter"
-  | "released";
-
-export type AutomationState = "done" | "scheduled" | "withdrawn";
-
-export interface Automation {
-  kind: AutomationKind;
-  at: Date;
-  audience: "client" | "guide";
-  title: string;
-  detail: string;
-  state: AutomationState;
+export interface Step {
+  kind: StepKind;
+  at: number;
+  label: string;
 }
 
-const HOUR = 3600_000;
-
-export function automationsFor(
-  session: Session,
-  opts: { guideName: string; hasLetter?: boolean; forGuide?: boolean; now?: Date },
-): Automation[] {
-  const now = opts.now ?? new Date();
-  const start = new Date(session.starts_at);
-  const end = new Date(session.ends_at);
-  const created = new Date(session.created_at);
-  const cancelled = session.status === "cancelled";
-  const first = opts.guideName.split(" ")[0];
-
-  const at = (d: Date): AutomationState => (cancelled && d > new Date(session.cancelled_at ?? now) ? "withdrawn" : d <= now ? "done" : "scheduled");
-
-  const items: Automation[] = [
-    {
-      kind: "confirmed",
-      at: created,
-      audience: "client",
-      title: "Booking confirmed",
-      detail: "Held instantly, with a calendar file. No request, no reply, no back-and-forth.",
-      state: "done",
-    },
-    {
-      kind: "calendar",
-      at: created,
-      audience: "guide",
-      title: "Calendar held, stillness protected",
-      detail: `The hour and ${session.buffer_before_min} minutes either side closed to everyone else.`,
-      state: "done",
-    },
-    {
-      kind: "briefing",
-      at: created,
-      audience: "guide",
-      title: "Briefing assembled",
-      detail: "Threshold, form, time zone and the three answers, gathered before the client arrives.",
-      state: "done",
-    },
+/** The scheduled steps for a job. They are derived from its start, so moving the job moves them. */
+export function plan(job: Job): Step[] {
+  const end = job.startMs + job.durationMin * MIN;
+  const steps: Step[] = [
+    { kind: "prep", at: job.startMs - 48 * HOUR, label: "Prep note" },
+    { kind: "reminder", at: job.startMs - 24 * HOUR, label: "Reminder with one-tap confirm" },
   ];
-
-  if (session.rescheduled_at && session.rescheduled_from) {
-    items.push({
-      kind: "moved",
-      at: new Date(session.rescheduled_at),
-      audience: "guide",
-      title: "Moved by the client",
-      detail: "Calendar, stillness and every reminder updated to the new hour.",
-      state: "done",
-    });
-  }
-
-  items.push(
-    {
-      kind: "preparation",
-      at: new Date(start.getTime() - 48 * HOUR),
-      audience: "client",
-      title: "Preparation note",
-      detail: "What to bring, how the room works, and who to call if the day turns hard.",
-      state: at(new Date(start.getTime() - 48 * HOUR)),
-    },
-    {
-      kind: "briefing-ready",
-      at: new Date(start.getTime() - 24 * HOUR),
-      audience: "guide",
-      title: "Briefing delivered",
-      detail: `The client's answers, sent to ${first} the day before.`,
-      state: at(new Date(start.getTime() - 24 * HOUR)),
-    },
-    {
-      kind: "reminder",
-      at: new Date(start.getTime() - 24 * HOUR),
-      audience: "client",
-      title: "Reminder",
-      detail: `The time in their own time zone, and that ${first} will be there early.`,
-      state: at(new Date(start.getTime() - 24 * HOUR)),
-    },
+  if (job.simReplies) steps.push({ kind: "simConfirm", at: job.startMs - 24 * HOUR + 40 * MIN, label: "Customer confirms" });
+  steps.push(
+    { kind: "nudge", at: job.startMs - CONFIRM_NUDGE_H * HOUR, label: "Second nudge if unconfirmed" },
+    { kind: "release", at: job.startMs - RELEASE_H * HOUR, label: "Release the slot if still unconfirmed" },
+    { kind: "omw", at: job.startMs - 30 * MIN, label: "On-my-way text" },
+    { kind: "complete", at: end, label: "Job marked done" },
+    { kind: "aftercare", at: end + 2 * HOUR, label: "Care tips and rebook link" },
   );
-
-  // A letter's existence is the client's alone; it never appears on the Guide's side.
-  if (opts.hasLetter && !opts.forGuide) {
-    const unlocks = new Date(end.getTime() + LETTER_SEAL_HOURS * HOUR);
-    items.push({
-      kind: "letter",
-      at: unlocks,
-      audience: "client",
-      title: "Letter unsealed",
-      detail: "A quiet note that the letter you wrote is ready to open.",
-      state: cancelled ? "done" : at(unlocks),
-    });
-  }
-
-  if (cancelled && session.cancelled_at) {
-    items.push({
-      kind: "released",
-      at: new Date(session.cancelled_at),
-      audience: "guide",
-      title: "Released by the client",
-      detail: "The hour reopened to others. Pending reminders withdrawn.",
-      state: "done",
-    });
-  }
-
-  return items.sort((a, b) => a.at.getTime() - b.at.getTime());
+  return steps;
 }
 
-export interface WeekLedger {
-  held: number;
-  messagesHandled: number;
-  stillnessMinutes: number;
-  briefings: number;
-  moves: number;
+export interface TimelineItem extends Step {
+  state: "sent" | "upcoming" | "skipped";
 }
 
-/** What Threshold handled across a set of sessions — the owner-effort ledger. */
-export function ledgerFor(sessions: (Session & { answers?: { answer: string | null }[] })[], now: Date = new Date()): WeekLedger {
-  const live = sessions.filter((s) => s.status !== "cancelled");
-  let messagesHandled = 0;
-  for (const s of sessions) {
-    // Everything that would otherwise be a message from the owner: confirmation,
-    // preparation note, reminder, a move or a release.
-    messagesHandled += automationsFor(s, { guideName: "", forGuide: true, now }).filter(
-      (a) => a.audience === "client" && a.state !== "withdrawn",
-    ).length;
-    if (s.rescheduled_at) messagesHandled += 1;
-    if (s.status === "cancelled") messagesHandled += 1;
+/** The plan as the customer and owner see it: what has gone out, and what is queued. */
+export function timelineFor(state: State, job: Job, nowMs: number): TimelineItem[] {
+  return plan(job)
+    .filter((s) => s.kind !== "simConfirm" && s.kind !== "complete")
+    .filter((s) => s.at >= job.createdAt)
+    .map((s) => {
+      const sent = state.messages.some((m) => m.key === `${job.id}:${s.kind}:${job.startMs}`);
+      const passed = s.at <= nowMs;
+      let st: TimelineItem["state"] = sent ? "sent" : passed ? "skipped" : "upcoming";
+      if (s.kind === "nudge" || s.kind === "release") {
+        if (job.status === "confirmed" && !sent) st = passed ? "skipped" : "upcoming";
+      }
+      return { ...s, state: st };
+    });
+}
+
+/** Deterministic stand-in for how a seeded customer behaves. */
+const coin = (id: string) => [...id].reduce((n, c) => n + c.charCodeAt(0), 0) % 2 === 0;
+
+export function tick(state: State, nowMs: number): State {
+  let s = state;
+  const done = new Set<string>();
+
+  for (let guard = 0; guard < 200; guard++) {
+    const due: { job: Job; step: Step }[] = [];
+    for (const job of s.jobs) {
+      if (![...ACTIVE, "completed"].includes(job.status)) continue;
+      for (const step of plan(job)) {
+        if (step.at > nowMs) continue;
+        if (step.at < job.createdAt) continue;
+        const key = `${job.id}:${step.kind}:${job.startMs}`;
+        if (done.has(key) || s.messages.some((m) => m.key === key)) continue;
+        due.push({ job, step });
+      }
+    }
+    if (!due.length) break;
+    due.sort((a, b) => a.step.at - b.step.at);
+    const { job, step } = due[0];
+    done.add(`${job.id}:${step.kind}:${job.startMs}`);
+    if (step.kind === "simConfirm") {
+      if (job.status === "booked") s = confirmJob(s, job.id, step.at);
+      continue;
+    }
+    const act =
+      (step.kind === "prep" && ACTIVE.includes(job.status)) ||
+      (step.kind === "reminder" && job.status === "booked") ||
+      (step.kind === "nudge" && job.status === "booked") ||
+      (step.kind === "release" && job.status === "booked") ||
+      (step.kind === "omw" && ACTIVE.includes(job.status)) ||
+      (step.kind === "complete" && ACTIVE.includes(job.status)) ||
+      (step.kind === "aftercare" && job.status === "completed");
+    if (!act) continue;
+    s = structuredClone(s);
+    const j = s.jobs.find((x) => x.id === job.id)!;
+    switch (step.kind) {
+      case "prep": sendForJob(s, j, "prep", step.at); break;
+      case "reminder": sendForJob(s, j, "reminder", step.at); break;
+      case "nudge": sendForJob(s, j, "nudge", step.at); break;
+      case "release": releaseJob(s, j, step.at); break;
+      case "omw": sendForJob(s, j, "omw", step.at); break;
+      case "complete":
+        j.status = "completed";
+        j.closedAt = step.at;
+        j.depositState = "applied";
+        pushEvent(s, step.at, "completed", j.id, `${j.customer.name}: job done`);
+        break;
+      case "aftercare": sendForJob(s, j, "aftercare", step.at); break;
+    }
   }
-  return {
-    held: live.length,
-    messagesHandled,
-    stillnessMinutes: live.reduce((m, s) => m + s.buffer_before_min + s.buffer_after_min, 0),
-    briefings: live.filter((s) => (s.answers ?? []).some((a) => a.answer)).length,
-    moves: sessions.filter((s) => s.rescheduled_at).length,
-  };
+
+  // Event-driven checks at `nowMs` --------------------------------------------
+  const rainIds = s.jobs
+    .filter((job) => {
+      const until = job.startMs - nowMs;
+      return ACTIVE.includes(job.status) && !job.rainOffer && !job.ownerFlag && until > 0 && until <= RAIN_CHECK_H * HOUR && isRainRisk(s, job.startMs, job.parking);
+    })
+    .map((j) => j.id);
+  const expiredIds = s.waitlist.filter((w) => w.status === "offered" && w.offer && w.offer.expiresAt <= nowMs).map((w) => w.id);
+
+  let out = s;
+  if (rainIds.length || expiredIds.length) {
+    out = structuredClone(s);
+    for (const id of rainIds) makeRainOffer(out, out.jobs.find((j) => j.id === id)!, nowMs);
+    // Waitlist offers that were not taken go to the next person.
+    for (const id of expiredIds) {
+      const entry = out.waitlist.find((w) => w.id === id)!;
+      const w = entry.offer!;
+      entry.status = "expired";
+      entry.offer = null;
+      offerBackfill(out, { start: w.windowStart, end: w.windowEnd }, nowMs, [entry.id]);
+    }
+  }
+
+  // Simulated customers respond, so the demo shows both halves.
+  for (const job of out.jobs) {
+    if (ACTIVE.includes(job.status) && job.rainOffer) {
+      const offer = job.rainOffer;
+      if (job.simReplies && coin(job.id) && nowMs >= offer.createdAt + 90 * MIN) {
+        try { out = chooseRainOption(out, job.id, 0, offer.createdAt + 90 * MIN, "customer"); } catch { /* option went stale */ }
+      } else if (nowMs >= offer.autoAt) {
+        try { out = chooseRainOption(out, job.id, 0, offer.autoAt, "auto_rain"); }
+        catch {
+          const fresh = structuredClone(out);
+          const j = fresh.jobs.find((x) => x.id === job.id)!;
+          j.rainOffer = null;
+          j.ownerFlag = `Rain is forecast for ${fmtDay(j.startMs)} at ${fmtTime(j.startMs)}, and ${j.customer.name} didn't pick a new time. Needs a call.`;
+          out = fresh;
+        }
+      }
+    }
+  }
+  for (const entry of out.waitlist) {
+    if (entry.status === "offered" && entry.simClaims && entry.offer && nowMs >= entry.offer.expiresAt - 100 * MIN) {
+      try { out = claimOffer(out, entry.id, entry.offer.expiresAt - 100 * MIN).state; } catch { /* taken */ }
+    }
+  }
+  return out;
+}
+
+/** Step the clock forward hour by hour so everything happens in the right order. */
+export function advance(state: State, fromMs: number, toMs: number): State {
+  let s = state;
+  for (let t = fromMs + HOUR; t < toMs; t += HOUR) s = tick(s, t);
+  return tick(s, toMs);
 }

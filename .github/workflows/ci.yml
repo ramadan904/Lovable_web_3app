@@ -18,31 +18,9 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run build
-      - name: Seed SQL is in sync with src/lib/data/seed.ts
-        run: npm run seed:sql && git diff --exit-code supabase/seed.sql
-
-  database:
-    name: Schema · RLS · booking rules (Postgres 16)
-    runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_PASSWORD: postgres
-        ports: ["5432:5432"]
-        options: >-
-          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
-    env:
-      PGHOST: localhost
-      PGPORT: 5432
-      PGUSER: postgres
-      PGPASSWORD: postgres
-    steps:
-      - uses: actions/checkout@v4
-      - run: supabase/tests/run.sh
 
   e2e:
-    name: Booking Ritual end-to-end
+    name: Booking journeys and accessibility (Playwright)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

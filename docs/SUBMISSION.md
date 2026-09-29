@@ -1,101 +1,121 @@
-# Threshold — #LovableChallenge submission kit
+# Fernhill Mobile Detail: #LovableChallenge submission kit
 
-Everything needed to submit: the write-up, how it maps to the judging criteria, a timed walkthrough script, and a pre-flight checklist.
+Deadline: **Oct 1, 11:59pm PDT**. Check the [Contra challenge page](https://contra.com/community/topic/lovablechallenge) for the exact submission form before posting: this kit was written from the published brief.
 
-> **Deadline:** Oct 1, 11:59pm PDT. Check the [challenge guidelines](https://contra.com/community/topic/lovablechallenge/guidelines) for the exact submission format before posting — this kit was written from the published brief and judging criteria.
+## The required pieces
 
----
+| Required | Status |
+|---|---|
+| Believable appointment business: name, location, quirks | Done: **Fernhill Mobile Detail**, Alberta Arts, NE Portland, Oregon. Solo owner Dario Reyes with one van. Quirks below |
+| A build made in Lovable, project link set to **public** | **You:** see "Get it into Lovable" |
+| Business name + one-line problem | Below |
+| Demo video, under 3 minutes | **You:** script below, timed to 2:40 |
+| Social post tagging @Lovable and #lovablechallenge | **You:** drafts below |
+| Bonus: process video | Optional: outline below |
 
-## Title
+## One line
 
-**Threshold — booking for the moments that don't reverse**
+> **Fernhill Mobile Detail** (Portland, OR): a one-van detailer who was losing evenings and paid slots to text threads, rainouts and no-shows now gets booked, reminded, rain-rescheduled and backfilled without typing a word.
 
-## One-line pitch
+## The archetype
 
-An appointment platform for irreversible life thresholds — a divorce made final, a terminal diagnosis, the week before surgery — that turns *"can I book with you?"* into *"you're booked"* in one quiet sitting, with nothing left for the practitioner to do.
+Dario Reyes runs Fernhill alone from a white Transit van called Bertha. He does up to three jobs a day, Tuesday to Saturday, at customers' homes across Portland, Beaverton and Tigard.
 
-## The business archetype
+His real-world friction, which the build takes on directly:
 
-A practice of **Threshold Guides**: facilitators (former chaplains, nurses, mediators, lawyers) who sit with people through permanent life changes. Like a therapist or coach, their inquiries are emotionally loaded, and every back-and-forth email costs both sides. Unlike most booking tools, the product has to protect the *practitioner's* capacity: stillness before and after each session, and a hard daily limit.
+- **It rains.** A driveway wash in a downpour is a bad job, so a wet forecast used to mean an evening of texting people to find new dry slots.
+- **He can't answer while working.** A "can you do my car?" text sits for hours and the customer books someone else.
+- **No-shows.** A first-time customer who doesn't show costs him a whole job (a whole paid slot).
+- **Drive time and water.** A Beaverton job needs 35 minutes each way, and the tank only holds two jobs.
+- **Codes and parking.** Gate codes arrive by text at 7 am, when he's already driving.
 
-## Approach: both halves of the brief
+## Both halves of the brief
 
-**Fixing the front door**
-- Soft matching shows only the 3–5 Guides who hold the client's threshold.
-- Clients see **only real open hours**, in their own time zone (clock changes included), with the Guide's day drawn to scale.
-- Three reflective questions replace the first two emails ("tell me more about what you're going through…").
-- The booking is **confirmed instantly**, with a calendar file. There's no request to approve.
-- If another client takes the hour mid-booking, the client is returned to the hour picker with a calm explanation and nothing they wrote is lost.
+**Fix the front door**
+- Ask in your own words → instant price, duration, and three real times → tap → booking prefilled.
+- The calendar only shows times Dario can reach (drive time, refill stop, daily limit already counted), with forecast per day and a "best dry day".
+- Confirmed instantly. A $25 deposit holds the slot. No request-and-approve.
 
-**Fixing the follow-through**
-- **Self-serve rescheduling and release** up to 24 h before the session, under the same rules as booking. The calendar, the buffers and the letter's seal all follow on their own.
-- The **preparation note** (48 h before) and **reminder** (24 h before) are scheduled automatically. They move when the session moves and are withdrawn if it's released.
-- A **briefing** is assembled for the Guide from the client's answers.
-- The **"Handled for you this week"** ledger shows the Guide what they didn't have to do: sessions held with no back-and-forth, messages they didn't write, hours of stillness protected, briefings ready.
+**Fix the follow-through**
+- Confirmation, prep note, one-tap-confirm reminder, second nudge, on-my-way and aftercare, all scheduled from the start time, so moving a job moves them.
+- **Rain rescheduling:** 48 hours out, an outdoor job in a forecast storm is offered the nearest dry slots; if the customer doesn't pick, the first is taken.
+- **No-show defence:** unconfirmed slots are released 3 hours out and offered to the waitlist, first whose job fits (checked against the drive), two hours to claim.
+- **Self-serve** move and cancel until 24 hours ahead, gate codes editable by the customer, refunds automatic.
+- **"Handled for you"** ledger on Dario's console: messages sent, bookings taken, reschedules, gaps refilled, and a transparent estimate of hours saved. "Needs you" shows only what genuinely needs a human.
 
 ## Before / after
 
-| | Before (email) | With Threshold |
+| | Before | With Fernhill |
 |---|---|---|
-| Messages to confirm | ~6 over 5 days | **0 from the Guide** |
-| Client tells their story | Twice, in pieces | **Once**, before arrival |
-| Time zones | Guessed | Shown for both sides |
-| Buffer between clients | Whatever's left | **45 min either side, enforced by the database** |
-| Guide's daily limit | Willpower | **Enforced** |
-| Rescheduling | Another thread | **Self-served**, rules intact |
-| Reminders | Remembered, maybe | **Scheduled** |
+| "Can you do my car?" | ~9 texts over 2 days | One message, an answer in seconds |
+| Confirming a booking | Dario types, then waits | Customer taps a time |
+| Rainy Tuesday | Evening of texts, reschedules | Offers sent, customers pick, first dry option taken if not |
+| Reminders | When he remembers | Scheduled, and they move with the job |
+| No-shows | A wasted half-day | Deposit, confirm-tap, release at 3 h, waitlist refill |
+| Gate codes | Texted at 7 am | On the morning sheet |
+| Overbooking | Judgement | Impossible: the engine refuses |
 
 ## Mapped to the judging criteria
 
-**1. Problem-solving impact: does an inquiry become a confirmed booking?**
-Yes, in one sitting. The whole path from threshold → Guide → questions → form → hour → letter → hold ends in an instant confirmation. A guest can go through everything before being asked to create an account.
+1. **Problem-solving impact:** an inquiry becomes a confirmed, deposit-backed booking in one sitting, with real availability. Verified by an end-to-end test that books through the UI.
+2. **Owner-effort reduction:** measurable on `/owner`: every automation is a real, logged action. Rain moves, releases, waitlist refills and reminders all happen with zero owner input; the demo controls let you watch each one fire in order.
+3. **Craft and execution:** 60+ unit tests on the scheduling rules, Playwright journeys on desktop and mobile, axe-core WCAG 2.1 AA audits on every page and booking step, no horizontal scroll on any page at phone width, reduced-motion respected, working empty/error/race states (a slot taken mid-booking returns you to the calendar without losing anything).
+4. **Storytelling:** the landing page shows the same customer before and after; the owner console opens with "Nothing needs you right now."
 
-**2. Owner-effort reduction**
-The Guide never schedules, confirms, reminds, reschedules or re-asks. The rules they care about (buffers, daily limit, availability windows) are **enforced in Postgres**: an exclusion constraint on buffered time ranges plus an atomic `book_session` / `reschedule_session` RPC. They're not just hidden in the UI. The Guide's calendar opens with a weekly ledger of what was handled.
+## Demo video: 2:40
 
-**3. Craft & execution**
-- The ritual is complete end-to-end, with loading, empty and error states on every step.
-- **Zero WCAG 2.1 AA violations** (axe-core) on every route and step, desktop and mobile. Reduced motion is respected.
-- Supabase with row-level security. Letters are unreadable, **even by their author**, until 48 h after the session. **Guides can never read them**, and never even learn that one exists.
-- Tests:
-  - 60+ database assertions
-  - 19 unit tests
-  - 30 Playwright end-to-end and accessibility tests on desktop and mobile
-  - All run in CI on every push
-- It runs instantly as a seeded demo, or against a real Supabase project; both were verified in a browser.
-
-**4. Storytelling**
-The landing page leads with the idea in one line, then shows **the same inquiry twice**: an email thread vs. Threshold. The **For Guides** section states the owner's side plainly. A demo guide gives four one-tap paths through the product.
-
----
-
-## 90-second walkthrough script
-
-Record at 1440×900. Open the **Demo guide** pill (bottom-left) before you start, so viewers see where each path begins.
+Record at 1440×900 (or a phone-width take for the mobile beat). Open **Demo controls** first, so viewers see where the storm button lives. Click **Reset** right before recording for a fresh week.
 
 | Time | Screen | Do | Say |
 |---|---|---|---|
-| 0:00 | Landing hero | Let the doorway draw in | "Some moments only happen once. Threshold is booking for them." |
-| 0:06 | Scroll to *The same inquiry, twice* | Pause on both cards | "Today this takes six emails over five days. The client tells their story twice, and there's no pause between clients." |
-| 0:16 | **Begin** | Pick *Finalizing a divorce* | "With Threshold, the client just starts." |
-| 0:22 | Guides | Pick Mara | "Only the three Guides who hold this threshold. Scarcity on purpose." |
-| 0:28 | Three questions | Type one answer, skip one | "Told once, read by the Guide before they meet." |
-| 0:36 | Form → Hour | Pick *Witnessed*, then a day and hour | "Real availability in your own time zone. Every session has forty-five minutes of stillness either side, enforced by the database." |
-| 0:50 | Letter | Type two lines, **Seal** | "A letter to your future self, sealed until two days after." |
-| 0:56 | Hold | Name, email, **Hold this time** | "One tap." |
-| 1:00 | Confirmation | Let the words arrive | "It is held. No one had to reply." |
-| 1:06 | My thresholds | Open *What happens next*, click **Move this time**, move it | "Plans change. The client moves it themselves. The reminders move with it." |
-| 1:18 | Demo guide → *See a Guide's week* | Show the tiles, open a briefing | "The Guide's side: what was handled this week, and a briefing before every session. They never see the letter." |
-| 1:28 | Back to hero | — | "Threshold. Built with Lovable." |
+| 0:00 | Landing hero | Let it sit | "This is Dario, a one-van car detailer in Portland. He loses evenings to texting, rainouts and no-shows. This is Fernhill, built with Lovable." |
+| 0:12 | Ask box | Tap the Subaru example → **Get real times** | "A customer writes the way they'd text a friend. Fernhill reads it, prices it, checks Dario's drive time, and offers three real slots. In seconds." |
+| 0:28 | Tap a time → Where step | Fill address, pick **Driveway** | "It knows her Outback with dog hair takes two and a half hours. She says the car is outside, and that matters later." |
+| 0:45 | When step | Point at day tiles and rain chips | "Only reachable times. Wet days are flagged; a dry day is recommended." |
+| 0:55 | You step → **Book** | Name, phone, email → Book | "A twenty-five dollar deposit holds it. Confirmed instantly." |
+| 1:05 | Confirmation | Scroll the queue | "Nothing left for anyone to do. Prep note, a one-tap confirm, a rain check, an on-my-way text are already queued." |
+| 1:15 | `/owner` | Show greeting, ledger tiles | "Dario's side. 'Nothing needs you' except one thing that really does: a request he doesn't offer. Everything else is done." |
+| 1:30 | Day sheet | Scroll the route | "His morning sheet: the route, drive times, a water refill before job three, gate codes, all filled in by customers." |
+| 1:45 | **Demo controls → Storm** | Click | "Now heavy rain is forecast for his busiest day." |
+| 1:52 | Messages → Rain filter | Point at rain offers | "Every customer with an outdoor car has been texted the nearest dry times. Covered cars are untouched." |
+| 2:05 | Open a customer link | Tap a dry option | "She picks Thursday. Her reminders move with her. Dario did nothing." |
+| 2:15 | Waitlist tab | Show an offer out | "Her old slot went to the first person on the waitlist whose job fits. Nobody phoned anybody." |
+| 2:25 | **+6 hours** ×2 | Show a nudge/release | "And if someone never confirms, the slot is released three hours before, and refilled." |
+| 2:35 | Ledger | Point at hours saved | "Hours of admin, gone. Fernhill Mobile Detail. Built with Lovable." |
 
-## Short description (for the post body)
+## Social post drafts
 
-> Threshold is an appointment platform for irreversible life thresholds: finalizing a divorce, a terminal diagnosis, the week before surgery. Booking is a seven-step ritual: choose the threshold, meet only the 3–5 Guides who hold it, answer three questions, pick a form and a real open hour, and write a letter to your future self that stays sealed until two days after. It's confirmed instantly. For the Guide there's nothing to do. There are no scheduling emails, and 45-minute buffers and a daily limit are enforced by the database. Clients reschedule themselves, reminders go out on schedule, and every session arrives with a briefing. Built with Lovable, on React, Tailwind, shadcn/ui and Supabase with row-level security.
+**X**
+> Meet Dario: one van, one man, a Portland rain problem. 🚐🌧️
+> I built Fernhill Mobile Detail with @Lovable so a customer text becomes a booked, deposit-backed job with zero effort from him. When a storm's forecast, it re-books the outdoor jobs onto dry days by itself, and refills no-show gaps from a waitlist.
+> [video] [link] #lovablechallenge
 
-## Pre-flight checklist
+**LinkedIn**
+> A car detailer in Portland loses his evenings to three things: texting back and forth, rainouts, and no-shows. For the #lovablechallenge I built Fernhill Mobile Detail with @Lovable around exactly those.
+>
+> The customer writes in plain English and gets a price and three real time slots (drive time already counted). A deposit holds the booking. The owner gets a morning sheet with the route, gate codes and drive times. When heavy rain is forecast, outdoor customers are offered dry slots automatically. Unconfirmed slots are released to a waitlist.
+>
+> The goal wasn't a pretty booking page: it was an owner who types nothing. Demo: [link]
 
-- [ ] Connect the repo to a Lovable project and publish it. The app runs as a seeded demo with no backend configured.
-- [ ] Open the published link in a private window and walk the 60-second path from the README.
-- [ ] Optional: connect Supabase (Lovable Cloud or your own project), apply `supabase/migrations/*`, then `supabase/seed.sql`.
-- [ ] Record the walkthrough above.
-- [ ] Post on Contra with the link, video, repo and screenshots from `docs/screenshots/`, following the guidelines page.
+## Get it into Lovable
+
+I can't create or publish a Lovable project from here, so these steps are yours. Verify the GitHub steps in Lovable's current docs, since the flow changes:
+
+1. Sign in to lovable.dev with the account that has the **challenge code** applied and is **Partner Program certified** (required for prize consideration).
+2. Create a new project (any starter prompt). In **Settings → GitHub**, connect the project to a GitHub repository.
+3. Copy this app's files into that repository's default branch and push. Lovable syncs from GitHub; wait for the build to go green in its preview.
+4. Try the Lovable preview: the **Demo controls** button (bottom-right), landing page, `/book` and `/owner` should all work with no environment variables.
+5. In Lovable: **Share → Publish**, and set the project visibility to **public**. Open the link in a private window and run the tour in the README.
+6. Submit on Contra: business name, one-line problem, public link, video, social post link.
+
+If the GitHub sync route is awkward under time pressure, a fallback is to paste the README's "What it does" and "The quirks" tables into a fresh Lovable prompt and ask it to rebuild; but the tested code here is the stronger entry.
+
+## Bonus: process video (60 seconds)
+
+- Show the failing test that found a real bug: the day strip pushing the whole page to 1,600px on a phone, found by an end-to-end run on a phone-sized viewport and now guarded by a "no horizontal scroll" test on every page.
+- Show `engine.ts` `checkDay` and the test proving a Beaverton job can't start before 8:50.
+- Show the seed test that makes sure the product looks alive whichever day it's opened.
+
+## Honest limits (say them out loud if asked)
+
+Texts and emails are composed and logged, not sent (production: Twilio and Resend). The deposit is simulated (production: Stripe). The forecast is illustrative (production: a weather API at the 48-hour check). Data lives in the browser (production: Postgres with an exclusion constraint on time ranges). Seeded customers reply automatically so both sides of a flow are visible in one demo.

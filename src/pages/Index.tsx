@@ -1,340 +1,252 @@
-import { useEffect, useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight } from "lucide-react";
-import { PageShell } from "@/components/brand/PageShell";
-import { GuideMark } from "@/components/brand/GuideMark";
-import { BeforeAfter, ForGuides } from "@/components/threshold/BeforeAfter";
-import { Doorway } from "@/components/threshold/Doorway";
-import { Reveal } from "@/components/threshold/Reveal";
-import { SealedEnvelope } from "@/components/threshold/SealedEnvelope";
-import { SpanDiagram } from "@/components/threshold/SpanDiagram";
+import { ArrowRight, CalendarCheck, CloudRain, MapPin, Send, Sparkles, Truck, Umbrella } from "lucide-react";
+import { Van } from "@/components/Van";
+import { WeatherIcon } from "@/components/Weather";
 import { Button } from "@/components/ui/button";
-import { useGuides, useThresholds } from "@/hooks/useCatalogue";
-import { hasRitualInProgress, STEPS } from "@/hooks/useRitual";
-import { PRESENCE, SEED_THRESHOLDS } from "@/lib/data/seed";
-import { ROMAN } from "@/lib/utils";
-
-const MOMENTS = [
-  "finalizing a divorce after nineteen years",
-  "the week before surgery",
-  "the last day of a thirty-year career",
-  "the house after the youngest leaves",
-  "the first month home from prison",
-  "the appointment where they say 'months'",
-  "choosing to stop IVF",
-  "the day 'temporary' becomes 'permanent'",
-  "signing your new name for the first time",
-];
-
-const RITUAL_LINES = [
-  "Choose, or describe, what you are crossing.",
-  "Meet three to five Guides. Never more.",
-  "Answer three questions your Guide will read.",
-  "Alone, witnessed, or with the practical aftermath.",
-  "An hour with stillness on either side.",
-  "Write to the person you'll be afterwards.",
-  "Hold the time. Your letter is sealed.",
-];
-
-function CyclingMoment() {
-  const [i, setI] = useState(0);
-  const [visible, setVisible] = useState(true);
-  useEffect(() => {
-    const id = setInterval(() => {
-      setVisible(false);
-      setTimeout(() => {
-        setI((n) => (n + 1) % MOMENTS.length);
-        setVisible(true);
-      }, 700);
-    }, 4200);
-    return () => clearInterval(id);
-  }, []);
-  return (
-    <span className="relative">
-      <span className={`transition-opacity duration-700 ease-quiet ${visible ? "opacity-100" : "opacity-0"}`} aria-hidden>
-        {MOMENTS[i]}.
-      </span>
-      <span className="sr-only">for moments like finalizing a divorce, surgery, leaving a career, or a terminal diagnosis.</span>
-    </span>
-  );
-}
+import { Textarea } from "@/components/ui/input";
+import { useNow } from "@/hooks/useNow";
+import { BUSINESS, DEPOSIT_CENTS, MAX_JOBS_PER_DAY, REFILL_MIN, dollars, quote } from "@/lib/business";
+import { slotsByDay } from "@/lib/engine";
+import { bookingLink, parseInquiry } from "@/lib/inquiry";
+import type { Inquiry } from "@/lib/model";
+import { actions, useStore } from "@/lib/store";
+import { addDays, fmtDate, fmtDay, fmtTime, localDate } from "@/lib/time";
+import { forecastFor } from "@/lib/weather";
+import { cn } from "@/lib/utils";
+import { EXAMPLES } from "@/components/owner/Inquiries";
 
 export default function Index() {
-  const thresholds = useThresholds();
-  const guides = useGuides();
-  const [inProgress, setInProgress] = useState(false);
-  useEffect(() => setInProgress(hasRitualInProgress()), []);
-  const list = thresholds.data ?? SEED_THRESHOLDS;
-  const featured = (guides.data ?? []).filter((g) => ["mara", "imani", "ruth"].includes(g.slug));
+  const state = useStore();
+  const now = useNow();
+  const [text, setText] = useState("");
+  const [answer, setAnswer] = useState<Inquiry | null>(null);
+
+  const ask = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!text.trim()) return;
+    setAnswer(actions.inquire("Website visitor", text.trim()));
+  };
+  const parsed = useMemo(() => (answer ? parseInquiry(answer.text, answer.at) : null), [answer]);
+
+  // Real availability, straight from the same engine the booking uses.
+  const openNow = useMemo(() => {
+    const q = quote("suv", "full", [], "NE");
+    return slotsByDay(state, q.durationMin, "NE", now)
+      .filter((d) => d.slots.length && !d.forecast.wet)
+      .slice(0, 3)
+      .map((d) => d.slots[0]);
+  }, [state, now]);
+
+  const week = useMemo(() => {
+    const today = localDate(now);
+    return Array.from({ length: 7 }, (_, i) => addDays(today, i));
+  }, [now]);
 
   return (
-    <PageShell>
-      {/* Hero ------------------------------------------------------------ */}
-      <section className="relative -mt-20 overflow-hidden pt-20 md:-mt-24 md:pt-24">
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[60%] bg-gradient-to-t from-charcoal-950/60 to-transparent" aria-hidden />
-        <div className="container relative grid min-h-[calc(100dvh-6rem)] items-center gap-10 pb-16 md:grid-cols-[1.15fr_0.85fr] md:gap-16 md:pb-24">
-          <div className="relative z-10 max-w-2xl">
-            <p className="eyebrow mb-8 opacity-0 animate-fade-in" style={{ animationDelay: "200ms" }}>
-              Appointments for the moments that do not reverse
-            </p>
-            <h1
-              className="text-balance font-serif text-[3.25rem] leading-[0.98] text-bone opacity-0 animate-rise-in sm:text-[4.5rem] lg:text-[5.75rem]"
-              style={{ animationDelay: "350ms", animationDuration: "1400ms" }}
-            >
-              Some doors only close behind you.
+    <>
+      {/* Hero ------------------------------------------------------------------ */}
+      <section className="border-b bg-gradient-to-b from-fern-soft/70 to-background">
+        <div className="container grid items-center gap-10 py-12 md:py-16 lg:grid-cols-[1.1fr_0.9fr]">
+          <div className="animate-rise-in">
+            <p className="chip border-primary/30 bg-card text-primary"><MapPin className="size-3.5" aria-hidden="true" /> {BUSINESS.city} · we come to you</p>
+            <h1 className="mt-4 text-4xl font-extrabold leading-[1.05] sm:text-5xl lg:text-6xl">
+              A clean car in your driveway. <span className="text-fern">Booked before you finish this sentence.</span>
             </h1>
-            <p
-              className="mt-8 max-w-xl text-pretty text-lg leading-relaxed text-bone-dim opacity-0 animate-fade-in md:text-xl"
-              style={{ animationDelay: "1100ms", animationDuration: "1400ms" }}
-            >
-              Threshold is where you book a Guide for the hour your life permanently changes — and make sure you don't cross it alone.
+            <p className="mt-5 max-w-xl text-lg text-foreground/85">
+              {BUSINESS.owner} runs Fernhill from one van, {BUSINESS.van}. He can't answer texts while he's under a dashboard, so you never have to wait for one: ask below and get real prices, real times and rain handled.
             </p>
-            <p
-              className="mt-6 font-serif text-xl italic text-copper-bright/90 opacity-0 animate-fade-in md:text-2xl"
-              style={{ animationDelay: "1700ms", animationDuration: "1400ms" }}
-            >
-              For <CyclingMoment />
-            </p>
-            <div className="mt-12 flex flex-wrap items-center gap-6 opacity-0 animate-fade-in" style={{ animationDelay: "2200ms" }}>
-              <Button asChild size="lg">
-                <Link to="/begin">
-                  {inProgress ? "Continue where you left off" : "Begin"} <ArrowRight aria-hidden />
-                </Link>
-              </Button>
-              <a href="#how" className="text-sm text-bone-dim underline decoration-bone/20 underline-offset-[6px] transition-colors duration-500 hover:text-bone hover:decoration-copper/70">
-                How it holds you
-              </a>
-            </div>
-            <p className="mt-14 max-w-md text-sm leading-relaxed text-bone-faint opacity-0 animate-fade-in" style={{ animationDelay: "2800ms" }}>
-              Not therapy. Not a crisis line. A held hour, with someone who has stood at this door before.
-            </p>
-          </div>
 
-          <div className="pointer-events-none absolute inset-0 flex items-end justify-center opacity-25 md:pointer-events-auto md:relative md:inset-auto md:items-center md:opacity-100">
-            <Doorway className="max-w-[22rem] md:max-w-[26rem]" />
-          </div>
-        </div>
-      </section>
-
-      <BeforeAfter />
-
-      {/* What we hold ----------------------------------------------------- */}
-      <section id="hold" className="border-t border-bone/[0.07] py-24 md:py-36">
-        <div className="container grid gap-14 md:grid-cols-[0.8fr_1.2fr] md:gap-20">
-          <Reveal className="md:sticky md:top-24 md:self-start">
-            <p className="eyebrow mb-6">What we hold</p>
-            <h2 className="text-balance font-serif text-[2.75rem] leading-[1.02] text-bone md:text-6xl">Each of these changes a person permanently.</h2>
-            <p className="mt-6 max-w-sm text-[1.0625rem] leading-relaxed text-bone-dim">
-              They deserve more than a calendar invite. Choose the one nearest to yours and begin there.
-            </p>
-          </Reveal>
-          <ol className="border-t border-bone/[0.07]">
-            {list.map((t, i) => (
-              <Reveal as="li" key={t.slug} delay={i * 40}>
-                <Link
-                  to={`/begin?threshold=${t.slug}`}
-                  className="group relative flex items-baseline gap-6 border-b border-bone/[0.07] py-6 pl-1 transition-colors duration-700 ease-quiet hover:bg-bone/[0.015]"
-                >
-                  <span className="w-8 shrink-0 font-serif text-sm text-bone-faint tabular-nums">{String(i + 1).padStart(2, "0")}</span>
-                  <span className="flex-1">
-                    <span className="block font-serif text-[1.625rem] leading-tight text-bone/85 transition-colors duration-700 group-hover:text-bone md:text-3xl">
-                      {t.name}
-                    </span>
-                    <span className="mt-1.5 block text-[0.9375rem] text-bone-faint transition-colors duration-700 group-hover:text-bone-dim">{t.line}</span>
-                  </span>
-                  <ArrowRight className="h-4 w-4 shrink-0 -translate-x-2 text-copper-bright opacity-0 transition-all duration-700 ease-quiet group-hover:translate-x-0 group-hover:opacity-100 group-focus-visible:opacity-100" aria-hidden />
-                  <span className="absolute bottom-[-1px] left-0 h-px w-0 bg-copper/70 transition-all duration-1000 ease-quiet group-hover:w-full" aria-hidden />
-                </Link>
-              </Reveal>
-            ))}
-          </ol>
-        </div>
-      </section>
-
-      {/* How it holds you --------------------------------------------------- */}
-      <section id="how" className="relative border-t border-bone/[0.07] bg-charcoal-950/40 py-24 md:py-36">
-        <div className="container">
-          <Reveal className="max-w-3xl">
-            <p className="eyebrow mb-6">How it holds you</p>
-            <h2 className="text-balance font-serif text-[2.75rem] leading-[1.02] text-bone md:text-6xl">Emotional safety is built into the calendar, not painted on it.</h2>
-          </Reveal>
-
-          <div className="mt-20 grid gap-20 md:mt-28 md:gap-28">
-            <Principle
-              numeral="I"
-              title="Stillness on either side."
-              body="Your Guide arrives forty-five minutes before you and stays forty-five minutes after. Those minutes are enforced by the calendar itself — no one can ever be booked into them."
-            >
-              <SpanDiagram durationMin={90} times={{ prepare: "09:15", start: "10:00", end: "11:30", rest: "12:15" }} />
-            </Principle>
-
-            <Principle
-              numeral="II"
-              title="Never more than two a day."
-              body="Guides hold at most two thresholds a day; some hold only one. We would rather you wait a week than meet someone depleted. Scarcity here is a kindness."
-            >
-              <ScarcityDay />
-            </Principle>
-
-            <Principle
-              numeral="III"
-              title="A letter you cannot open yet."
-              body="Before your session you write to the person you'll be afterwards. It is sealed — even from you — until forty-eight hours after you cross. Your Guide will never read it."
-            >
-              <div className="flex items-center gap-8">
-                <SealedEnvelope />
-                <div className="text-sm leading-relaxed text-bone-faint">
-                  <p className="font-serif text-2xl text-bone">Sealed</p>
-                  <p className="mt-1">Opens Saturday, 11:30</p>
-                  <p>48 hours after your session</p>
-                </div>
+            <form onSubmit={ask} className="mt-7 max-w-xl space-y-3 rounded-lg border bg-card p-4 shadow-lift">
+              <label htmlFor="ask" className="flex items-center gap-2 text-sm font-bold"><Sparkles className="size-4 text-sun-ink" aria-hidden="true" /> Ask the way you'd text a friend</label>
+              <Textarea id="ask" rows={2} value={text} onChange={(e) => { setText(e.target.value); setAnswer(null); }} placeholder="My dog wrecked my Outback. I'm in Sellwood. Friday morning?" />
+              <div className="flex flex-wrap items-center gap-2">
+                <Button type="submit" disabled={!text.trim()}><Send /> Get real times</Button>
+                <Button asChild variant="ghost"><Link to="/book">Or pick everything myself <ArrowRight /></Link></Button>
               </div>
-            </Principle>
+              <div className="flex flex-wrap gap-1.5" aria-label="Try an example">
+                {EXAMPLES.slice(0, 3).map((ex) => (
+                  <button key={ex} type="button" onClick={() => { setText(ex); setAnswer(null); }} className="max-w-full truncate rounded-full border bg-background px-3 py-1 text-left text-xs font-medium hover:border-foreground/50">{ex}</button>
+                ))}
+              </div>
+            </form>
+
+            {answer && parsed && (
+              <div className="mt-4 max-w-xl space-y-3 animate-rise-in" role="status" aria-live="polite">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Fernhill replied instantly</p>
+                <p className="whitespace-pre-wrap rounded-2xl rounded-tl-md bg-fern-soft px-4 py-3 text-fern-ink">{answer.reply.replace(/ fernhill\.app\S*/g, "").replace(/: ?$/, ".")}</p>
+                {answer.status !== "needs_owner" && (
+                  <div className="flex flex-wrap gap-2">
+                    {answer.suggested.map((ms) => (
+                      <Button key={ms} asChild variant="sun" size="sm"><Link to={bookingLink({ ...parsed, startMs: ms })}>{fmtDay(ms)} · {fmtTime(ms)}</Link></Button>
+                    ))}
+                    <Button asChild variant="outline" size="sm"><Link to={bookingLink(parsed)}>{answer.suggested.length ? "See all times" : "Continue"}</Link></Button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
-        </div>
-      </section>
 
-      {/* The ritual -------------------------------------------------------- */}
-      <section className="border-t border-bone/[0.07] py-24 md:py-36">
-        <div className="container grid gap-14 md:grid-cols-[0.8fr_1.2fr] md:gap-20">
-          <Reveal className="md:sticky md:top-24 md:self-start">
-            <p className="eyebrow mb-6">The booking is a ritual</p>
-            <h2 className="text-balance font-serif text-[2.75rem] leading-[1.02] text-bone md:text-6xl">Seven quiet steps. Nothing rushed.</h2>
-            <p className="mt-6 max-w-sm text-[1.0625rem] leading-relaxed text-bone-dim">
-              You can stop at any point. Your place is kept on this device, and nothing is shared until you hold the time.
-            </p>
-            <Button asChild variant="outline" className="mt-10">
-              <Link to="/begin">Begin the ritual</Link>
-            </Button>
-          </Reveal>
-          <ol className="relative">
-            <span className="absolute bottom-6 left-[1.1rem] top-6 w-px bg-gradient-to-b from-copper/60 via-bone/10 to-transparent" aria-hidden />
-            {STEPS.map((name, i) => (
-              <Reveal as="li" key={name} delay={i * 60} className="relative flex gap-8 pb-10 last:pb-0">
-                <span className="relative z-10 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-bone/15 bg-charcoal-900 font-serif text-sm text-copper-bright">
-                  {ROMAN[i]}
-                </span>
-                <div className="pt-1">
-                  <h3 className="font-serif text-2xl text-bone md:text-[1.75rem]">{name}</h3>
-                  <p className="mt-1.5 text-[0.9375rem] leading-relaxed text-bone-faint">{RITUAL_LINES[i]}</p>
+          <div className="animate-rise-in [animation-delay:120ms]">
+            <div className="card overflow-hidden">
+              <div className="bg-gradient-to-b from-rain-soft to-card px-6 pt-6">
+                <Van />
+              </div>
+              <div className="space-y-3 p-6">
+                <div className="flex items-center justify-between">
+                  <h2 className="font-display text-lg font-bold">Next dry openings</h2>
+                  <span className="text-xs font-medium text-muted-foreground">Full Refresh · SUV · NE Portland</span>
                 </div>
-              </Reveal>
-            ))}
-          </ol>
-        </div>
-      </section>
-
-      <ForGuides />
-
-      {/* Guides -------------------------------------------------------------- */}
-      <section className="border-t border-bone/[0.07] bg-charcoal-950/40 py-24 md:py-36">
-        <div className="container">
-          <Reveal className="flex flex-wrap items-end justify-between gap-8">
-            <div className="max-w-2xl">
-              <p className="eyebrow mb-6">Threshold Guides</p>
-              <h2 className="text-balance font-serif text-[2.75rem] leading-[1.02] text-bone md:text-6xl">People who have stood at these doors before.</h2>
+                {openNow.length ? (
+                  <ul className="grid gap-2">
+                    {openNow.map((ms) => (
+                      <li key={ms}>
+                        <Link to={bookingLink({ vehicle: "suv", service: "full", zone: "NE", zip: "97212", startMs: ms })} className="flex items-center justify-between rounded-md border bg-background px-4 py-3 font-semibold hover:border-foreground/60">
+                          <span>{fmtDay(ms)} at {fmtTime(ms)}</span>
+                          <ArrowRight className="size-4 text-fern" aria-hidden="true" />
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                ) : <p className="text-muted-foreground">Dry days are filling up. Join the waitlist on the booking page.</p>}
+                <p className="text-sm text-muted-foreground">Live from Dario's calendar. Drive time between jobs is already counted.</p>
+              </div>
             </div>
-            <Link to="/guides" className="text-sm text-bone-dim underline decoration-bone/20 underline-offset-[6px] transition-colors duration-500 hover:text-bone hover:decoration-copper/70">
-              Meet every Guide
-            </Link>
-          </Reveal>
-          <div className="mt-16 grid gap-4 md:grid-cols-3">
-            {(featured.length ? featured : [null, null, null]).map((g, i) => (
-              <Reveal key={g?.id ?? i} delay={i * 90}>
-                <div className="flex h-full flex-col rounded-lg border border-bone/[0.08] p-8 transition-colors duration-700 hover:border-bone/20">
-                  {g ? (
-                    <>
-                      <GuideMark name={g.name} presence={g.presence} />
-                      <blockquote className="mt-8 flex-1 font-serif text-[1.375rem] italic leading-snug text-bone/90">“{g.statement}”</blockquote>
-                      <p className="mt-8 text-sm text-bone">{g.name}</p>
-                      <p className="mt-1 text-xs text-bone-faint">
-                        {PRESENCE[g.presence].name} · {g.location} · {g.years_holding} years
-                      </p>
-                    </>
-                  ) : (
-                    <div className="space-y-4">
-                      <div className="skeleton h-[4.5rem] w-14" />
-                      <div className="skeleton h-20 w-full" />
-                      <div className="skeleton h-4 w-1/2" />
-                    </div>
-                  )}
-                </div>
-              </Reveal>
-            ))}
           </div>
         </div>
       </section>
 
-      {/* Not therapy ---------------------------------------------------------- */}
-      <section className="border-t border-bone/[0.07] py-28 md:py-44">
-        <Reveal className="container max-w-4xl text-center">
-          <p className="eyebrow mb-10">What this is not</p>
-          <p className="text-balance font-serif text-[2.25rem] leading-[1.12] text-bone md:text-[3.5rem]">
-            Threshold doesn't try to fix anything. It makes sure you don't cross alone.
-          </p>
-          <p className="mx-auto mt-10 max-w-lg text-[0.9375rem] leading-relaxed text-bone-faint">
-            Guides are not therapists and do not diagnose or treat. If you are in crisis, please contact your local emergency number.
-          </p>
-        </Reveal>
+      {/* How it works ---------------------------------------------------------- */}
+      <section className="container py-16" aria-labelledby="how-h">
+        <h2 id="how-h" className="max-w-2xl text-3xl font-extrabold md:text-4xl">From “can you do my car?” to “you’re booked” in one sitting</h2>
+        <ol className="mt-8 grid gap-4 md:grid-cols-3">
+          {[
+            { n: 1, t: "Say what you drive, where it is", d: "Or just text it in your own words. We work out the size, the service, the add-ons and the neighborhood, then price and time it.", icon: <Truck className="size-5" /> },
+            { n: 2, t: "Pick a time that's really free", d: "Only slots Dario can actually reach appear. Drive time, water refills and his daily limit are already in the maths.", icon: <CalendarCheck className="size-5" /> },
+            { n: 3, t: "Done. Nobody has to text you", d: `A ${dollars(DEPOSIT_CENTS)} deposit holds it. Prep note, confirm-tap, rain check and on-the-way text all happen on their own.`, icon: <Sparkles className="size-5" /> },
+          ].map((s) => (
+            <li key={s.n} className="card p-6">
+              <span className="flex size-10 items-center justify-center rounded-full bg-fern-soft text-fern-ink" aria-hidden="true">{s.icon}</span>
+              <h3 className="mt-4 text-xl font-bold"><span className="text-muted-foreground">{s.n}.</span> {s.t}</h3>
+              <p className="mt-2 text-foreground/80">{s.d}</p>
+            </li>
+          ))}
+        </ol>
       </section>
 
-      {/* Final call ------------------------------------------------------------ */}
-      <section className="relative overflow-hidden border-t border-bone/[0.07] py-28 md:py-40">
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-full threshold-glow opacity-70" aria-hidden />
-        <div className="copper-line absolute inset-x-0 top-0 h-px" aria-hidden />
-        <Reveal className="container relative text-center">
-          <h2 className="font-serif text-5xl text-bone md:text-7xl">When you are ready.</h2>
-          <p className="mx-auto mt-6 max-w-md text-[1.0625rem] leading-relaxed text-bone-dim">It takes about ten minutes. You can stop at any point.</p>
-          <Button asChild size="lg" className="mt-12">
-            <Link to="/begin">
-              Begin <ArrowRight aria-hidden />
-            </Link>
-          </Button>
-        </Reveal>
-      </section>
-    </PageShell>
-  );
-}
-
-function Principle({ numeral, title, body, children }: { numeral: string; title: string; body: string; children: React.ReactNode }) {
-  return (
-    <Reveal className="grid items-center gap-10 md:grid-cols-2 md:gap-20">
-      <div>
-        <p className="font-serif text-lg text-copper-bright">{numeral}</p>
-        <h3 className="mt-3 font-serif text-4xl leading-tight text-bone md:text-5xl">{title}</h3>
-        <p className="mt-5 max-w-md text-[1.0625rem] leading-relaxed text-bone-dim">{body}</p>
-      </div>
-      <div className="rounded-lg border border-bone/[0.07] bg-charcoal-900/60 p-8 md:p-10">{children}</div>
-    </Reveal>
-  );
-}
-
-function ScarcityDay() {
-  // 08:00–18:00, two sessions with their stillness; the rest deliberately empty.
-  const span = 600;
-  const pct = (m: number) => `${(m / span) * 100}%`;
-  const blocks = [
-    { at: 75, len: 90 },
-    { at: 330, len: 90 },
-  ];
-  return (
-    <div>
-      <div className="relative h-12 overflow-hidden rounded-md bg-bone/[0.04]" role="img" aria-label="A Guide's day from eight to six: two sessions, each with forty-five minutes of stillness either side, and nothing else.">
-        {blocks.map((b) => (
-          <div key={b.at}>
-            <div className="buffer-hatch absolute inset-y-1.5" style={{ left: pct(b.at - 45), width: pct(b.len + 90) }} />
-            <div className="absolute inset-y-1.5 bg-copper/80" style={{ left: pct(b.at), width: pct(b.len) }} />
+      {/* Rain ------------------------------------------------------------------ */}
+      <section className="border-y bg-rain-soft/60" aria-labelledby="rain-h">
+        <div className="container grid gap-10 py-16 lg:grid-cols-[1fr_1.1fr]">
+          <div>
+            <p className="eyebrow !text-rain">The Portland problem</p>
+            <h2 id="rain-h" className="mt-1 text-3xl font-extrabold md:text-4xl">It rains here. We plan for it.</h2>
+            <p className="mt-4 text-lg text-foreground/85">
+              Washing a car outdoors in a downpour is a bad job for everyone. So if your car is outside and heavy rain is forecast two days before, we text you the nearest dry times and move you free. Pick one, or we take the first.
+            </p>
+            <ul className="mt-6 space-y-3">
+              <li className="flex gap-3"><Umbrella className="mt-1 size-5 shrink-0 text-fern" aria-hidden="true" /><span><strong>Garage or carport?</strong> Rain never touches your booking.</span></li>
+              <li className="flex gap-3"><CloudRain className="mt-1 size-5 shrink-0 text-rain" aria-hidden="true" /><span><strong>Driveway or street?</strong> We watch the forecast so you don't have to.</span></li>
+            </ul>
           </div>
-        ))}
-      </div>
-      <div className="mt-2.5 flex justify-between text-[0.6875rem] tabular-nums text-bone-faint">
-        <span>08:00</span>
-        <span>13:00</span>
-        <span>18:00</span>
-      </div>
-      <p className="mt-6 text-sm text-bone-faint">
-        <span className="text-bone-dim">Full.</span> The rest of the day stays empty on purpose.
-      </p>
-    </div>
+          <div className="card p-5" aria-label="Seven-day forecast">
+            <p className="mb-3 text-sm font-semibold text-muted-foreground">The week ahead, as the booking page sees it</p>
+            <ul className="grid grid-cols-7 gap-1.5 text-center">
+              {week.map((d) => {
+                const f = forecastFor(d, state.stormDays);
+                return (
+                  <li key={d} className={cn("rounded-md px-1 py-3", f.wet ? "bg-rain-soft text-rain" : "bg-sun-soft/60 text-sun-ink")}>
+                    <p className="text-xs font-semibold uppercase">{fmtDate(d, "EEE")}</p>
+                    <WeatherIcon f={f} className="mx-auto my-1.5 size-5" />
+                    <p className="text-sm font-bold">{f.rain}%</p>
+                    <p className="sr-only">{f.label}</p>
+                  </li>
+                );
+              })}
+            </ul>
+            <p className="mt-4 text-sm text-muted-foreground">Illustrative forecast for the demo. In production this reads a real weather API.</p>
+          </div>
+        </div>
+      </section>
+
+      {/* Before / after -------------------------------------------------------- */}
+      <section className="container py-16" aria-labelledby="ba-h">
+        <p className="eyebrow">Same customer. Same Thursday.</p>
+        <h2 id="ba-h" className="mt-1 max-w-3xl text-3xl font-extrabold md:text-4xl">Before: nine messages and a no-show. After: none from Dario.</h2>
+        <div className="mt-8 grid gap-6 lg:grid-cols-2">
+          <div className="card space-y-3 p-6">
+            <h3 className="flex items-center justify-between text-lg font-bold">Before <span className="chip border-danger/30 bg-danger-soft text-danger">9 messages · 2 days</span></h3>
+            <ul className="space-y-2 text-[0.9375rem]" aria-label="A typical booking thread">
+              {[
+                ["in", "hi do you do subarus? how much?"],
+                ["out", "Yes! Depends what you need. Inside, outside, both?"],
+                ["in", "both, dog hair everywhere lol"],
+                ["out", "OK ~$250. Where are you?"],
+                ["in", "sellwood"],
+                ["out", "I have Friday 2pm or Sat 9?"],
+                ["in", "friday morning? or next week"],
+                ["out", "Friday's out. Tue 10?"],
+                ["in", "ok 👍"],
+              ].map(([d, t], i) => (
+                <li key={i} className={cn("max-w-[85%] rounded-2xl px-3.5 py-2", d === "out" ? "rounded-tl-md bg-muted" : "ml-auto rounded-tr-md bg-primary/90 text-primary-foreground")}>{t}</li>
+              ))}
+            </ul>
+            <p className="rounded-md bg-danger-soft p-3 text-sm font-medium text-danger">Then, Tuesday: heavy rain, no reply to the reminder, and a two-hour hole in Dario's day.</p>
+          </div>
+          <div className="card space-y-3 p-6">
+            <h3 className="flex items-center justify-between text-lg font-bold">Now <span className="chip border-fern/30 bg-fern-soft text-fern-ink">0 messages from Dario</span></h3>
+            <ol className="space-y-3 text-[0.9375rem]">
+              {[
+                ["10:02 pm", "She writes once, in her own words. Fernhill replies in seconds with a price, a duration and three real times."],
+                ["10:03 pm", "She taps a time, adds her gate code, pays the deposit. Booked."],
+                ["Sun", "Prep note goes out by itself. Forecast: heavy rain Tuesday."],
+                ["Mon 9 am", "Her car's in the driveway, so she gets three dry options. She taps Wednesday. Reminders follow."],
+                ["Tue", "Her old Tuesday slot goes to the first person on the waitlist whose job fits. Nobody phoned anyone."],
+                ["Wed", "One-tap confirm. Dario arrives, the gate code is on his sheet. Two hours later: care tips and a rebook link."],
+              ].map(([when, what]) => (
+                <li key={when} className="grid grid-cols-[5rem_1fr] gap-3"><span className="font-display font-bold text-fern">{when}</span><span>{what}</span></li>
+              ))}
+            </ol>
+            <Button asChild className="mt-2"><Link to="/owner">See Dario's side <ArrowRight /></Link></Button>
+          </div>
+        </div>
+      </section>
+
+      {/* Quirks ---------------------------------------------------------------- */}
+      <section className="border-t bg-card" aria-labelledby="rules-h">
+        <div className="container py-16">
+          <h2 id="rules-h" className="max-w-2xl text-3xl font-extrabold md:text-4xl">One van. One Dario. Rules the calendar actually keeps.</h2>
+          <p className="mt-3 max-w-2xl text-lg text-foreground/80">These are the quirks of a real one-person detailing business, and they're enforced by the booking engine, not left to memory.</p>
+          <dl className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {[
+              ["Three jobs a day, at most", `Then Bertha and Dario are done. The calendar never offers a fourth.`],
+              ["The tank holds two jobs", `Before a third job there's a ${REFILL_MIN}-minute refill stop, and it's on the clock.`],
+              ["Drive time is work time", "Portland to Beaverton is 35 minutes. Slots reflect it, so he's never late."],
+              ["Vehicle size sets the time", "A pet-hair SUV takes twice as long as a sedan wash. Duration and price follow the car."],
+              ["High no-show risk", `A ${dollars(DEPOSIT_CENTS)} deposit, a one-tap confirm the day before, and unconfirmed slots go to the waitlist ${3} hours ahead.`],
+              ["Gates, codes and tricky parking", "Customers add them once. They land on Dario's morning sheet, not in his texts."],
+            ].map(([t, d]) => (
+              <div key={t} className="rounded-lg border bg-background p-5">
+                <dt className="font-display text-lg font-bold">{t}</dt>
+                <dd className="mt-1 text-foreground/80">{d}</dd>
+              </div>
+            ))}
+          </dl>
+          <p className="mt-6 text-sm text-muted-foreground">Max {MAX_JOBS_PER_DAY} jobs a day · Tue to Sat · Portland, Beaverton and Tigard.</p>
+        </div>
+      </section>
+
+      <section className="bg-primary text-primary-foreground">
+        <div className="container flex flex-col items-start justify-between gap-6 py-14 md:flex-row md:items-center">
+          <div>
+            <h2 className="text-3xl font-extrabold md:text-4xl">Book it in a minute. Dario won't even know until Tuesday.</h2>
+            <p className="mt-2 text-primary-foreground/80">Or open his console and watch what happens when it rains.</p>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <Button asChild variant="sun" size="lg"><Link to="/book"><CalendarCheck /> Book a detail</Link></Button>
+            <Button asChild size="lg" variant="outline" className="border-primary-foreground/40 bg-transparent text-primary-foreground hover:bg-primary-foreground/10"><Link to="/owner">Owner view</Link></Button>
+          </div>
+        </div>
+      </section>
+    </>
   );
 }

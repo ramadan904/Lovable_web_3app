@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
+import { nowMs, useStore } from "@/lib/store";
 
-/** A clock that ticks gently — enough for countdowns, never enough to feel anxious. */
-export function useNow(intervalMs = 30_000): Date {
-  const [now, setNow] = useState(() => new Date());
+/** The business's "now": real time plus the demo clock, refreshed every 30 seconds. */
+export function useNow(): number {
+  useStore();
+  const [, force] = useState(0);
   useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), intervalMs);
-    return () => clearInterval(id);
-  }, [intervalMs]);
-  return now;
+    const id = window.setInterval(() => force((n) => n + 1), 30_000);
+    return () => window.clearInterval(id);
+  }, []);
+  return nowMs();
 }

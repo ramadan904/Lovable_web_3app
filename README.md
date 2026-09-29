@@ -1,163 +1,113 @@
-# Threshold
+# Fernhill Mobile Detail
 
-**An appointment platform for irreversible life thresholds** — the quiet, high‑stakes moments when a person's identity, body, status or future permanently changes. Facilitators are called **Threshold Guides**. This is not therapy.
+**A booking system for a one-van car detailer in Portland, Oregon, that turns "can you do my car?" into "you're booked" without the owner typing a word.**
 
-> Some doors only close behind you.
+Built for the **#LovableChallenge** ("Built for small business"). React + Vite + TypeScript + Tailwind + shadcn-style primitives.
 
-Built with Lovable's stack: **React + Vite + TypeScript + Tailwind + shadcn/ui + Supabase**.
+## The business
 
-![Threshold — landing](docs/screenshots/01-landing.jpg)
+| | |
+|---|---|
+| **Name** | Fernhill Mobile Detail |
+| **Owner** | Dario Reyes, solo, with one van called Bertha |
+| **Where** | Alberta Arts, NE Portland. Serves Portland, Beaverton and Tigard |
+| **Hours** | Tuesday to Saturday, 8:00 to 5:30. Monday is van maintenance and admin |
+| **Ticket** | $85 to $460 per job, one to four hours |
 
-<table>
-  <tr>
-    <td><img src="docs/screenshots/02-guides.jpg" alt="Soft matching: three Guides hold this threshold" /></td>
-    <td><img src="docs/screenshots/03-reflection.jpg" alt="Three questions, asked one at a time" /></td>
-  </tr>
-  <tr>
-    <td><img src="docs/screenshots/05-hour.jpg" alt="Choosing the hour, with the Guide's day and the 45-minute stillness drawn to scale" /></td>
-    <td><img src="docs/screenshots/06-letter.jpg" alt="A letter to your future self, sealed for 48 hours after the session" /></td>
-  </tr>
-  <tr>
-    <td><img src="docs/screenshots/07-held.jpg" alt="The confirmation: It is held." /></td>
-    <td><img src="docs/screenshots/08-record.jpg" alt="My thresholds: held sessions and letters" /></td>
-  </tr>
-  <tr>
-    <td><img src="docs/screenshots/13-before-after.jpg" alt="The same inquiry twice: an email thread vs. Threshold" /></td>
-    <td><img src="docs/screenshots/14-move.jpg" alt="A client moves their own session; the Guide does nothing" /></td>
-  </tr>
-  <tr>
-    <td><img src="docs/screenshots/10-guide-week.jpg" alt="A Guide's week, with prepare and rest buffers around every session" /></td>
-    <td><img src="docs/screenshots/11-briefing.jpg" alt="A session briefing — never the letter" /></td>
-  </tr>
-</table>
+### The quirks that make it real
 
----
+Each one is a rule the booking engine enforces (`src/lib/engine.ts`), not copy on a page.
+
+| Quirk | What the system does about it |
+|---|---|
+| **It rains in Portland.** Outdoor washing in a downpour is a bad job | Customers say if the car is covered. Outdoor bookings are watched: at 48 hours, if the forecast is 70%+ rain, the customer is texted the nearest dry slots and moved free. If they don't pick, the first option is taken after 6 hours. Covered cars are never touched |
+| **Solo owner, one van** | Max three jobs a day. The calendar never offers a fourth |
+| **The water tank holds two jobs** | A 30-minute refill stop is required before the third job, and is on the clock |
+| **Drive time is work time** | A zone-to-zone drive matrix. Load time before the first job, the drive home after the last. A Beaverton job can't start at 8:30 |
+| **Vehicle size and add-ons set the duration** | A pet-hair SUV takes about twice as long as a sedan wash. Price and time are computed together, then fed to the calendar |
+| **High no-show rate** | $25 deposit, a one-tap confirm the day before, a second nudge at 6 h, and an unconfirmed slot is released at 3 h to the waitlist |
+| **Gates, codes, awkward parking** | Customers enter them once, can update them any time, and they appear on Dario's morning sheet |
+
+## What it does
+
+**Fixes the front door**
+- **Ask in your own words.** A message like *"hey do u do subarus? filthy inside from my dog, need it before saturday, im in sellwood"* is parsed (vehicle, service, add-ons, neighbourhood, deadline) and answered instantly with a price, duration, and three real open times. Tapping one opens the booking already filled in.
+- **Only real availability.** The booking calendar lists only slots Dario can actually reach, with the forecast beside each day and a "best dry day" hint.
+- **Instant confirmation.** No request to approve. A booking holds the moment the deposit is paid.
+
+**Fixes the follow-through** (Dario's side, `/owner`)
+- **Automations that run without him:** confirmation, prep note (48 h), reminder with one-tap confirm (24 h), nudge (6 h), release (3 h), on-my-way, aftercare. They are derived from the start time, so **moving a job moves its reminders**.
+- **Rain rescheduling**, above.
+- **Self-serve changes:** customers move or cancel themselves until 24 h before, under the same rules as booking. Refunds are automatic.
+- **Waitlist backfill:** a freed slot goes to the first waitlisted customer whose job fits it (checked against the drive), with a 2-hour window, then to the next.
+- **A morning day sheet:** the route in order, drive minutes, refill stop, addresses, gate codes and notes, and who has not confirmed.
+- **"Handled for you":** a weekly ledger of messages sent, bookings taken, reschedules and gaps refilled, with a transparent estimate of hours saved. Nothing is hidden: the "Needs you" list only shows what truly needs a human (for example a request for ceramic coating, which isn't on the menu).
 
 ## Run it
 
 ```bash
 npm install
-npm run dev          # http://localhost:8080
+npm run dev        # http://localhost:8080
 ```
 
-With no Supabase credentials, Threshold runs a **self-contained seeded demo**. It uses the same rules as the database and stores its data in the browser, so it can be demoed straight away.
+There is no backend to configure. The app runs on a seeded in-browser store, generated relative to today so it is alive whenever it is opened.
 
-| Demo account | Email | Password | What you'll see |
-|---|---|---|---|
-| Client | `ines@threshold.demo` | `threshold` | One threshold crossed, one held, one letter unsealed, one sealed |
-| Guide | `mara@threshold.demo` | `threshold` | Her week, buffers, and each client's briefing |
+### Demo controls (bottom-right, on every page)
 
-Both are also one-tap buttons on `/login`. In demo mode a small **Demo guide** panel (bottom-left) offers the four paths worth seeing — the ritual, a client's record, an unsealed letter, a Guide's week — plus a reset. It stays out of the ritual and the letter view.
-
-> Entering the **#LovableChallenge**? The write-up, criteria mapping and a timed walkthrough script are in [`docs/SUBMISSION.md`](docs/SUBMISSION.md).
-
-### A 60‑second demo path
-
-1. **`/`** — the concept in under ten seconds: a headline, a doorway and a cycling list of real thresholds.
-2. **Begin** → pick a threshold → meet **3–5 Guides** (never more) → three reflective questions → pick a form → choose an hour → write a letter → **Hold this time**.
-3. The cinematic confirmation → **My thresholds** (the held session, and the sealed letter with its countdown).
-4. **Sign in as Inês** → open her unsealed letter.
-5. **Sign in as Mara** → the Guide calendar, with hatched 45‑minute buffers either side of every session. Click a session to read its briefing.
-
----
-
-## The Booking Ritual
-
-| | Step | What's encoded |
-|---|---|---|
-| I | The threshold | Choose one of nine, or describe it in your own words. Keyword soft‑matching suggests the nearest. |
-| II | Your Guide | Soft matching returns **3–5 Guides**. Each card shows the Guide's local time and their next open hour in *your* timezone. |
-| III | Three questions | Asked one at a time. Each can be skipped ("I'd rather bring this into the room"). The Guide reads the answers as a briefing. |
-| IV | The form | Solo (90) · Witnessed (120) · Threshold + Practical Aftermath (150). Drawn to scale, buffers included. |
-| V | The hour | Real availability, **hard 45‑minute buffers before and after**, a daily limit, 24 h minimum notice, and correct handling of timezones and clock changes. Shows the Guide's day to scale. |
-| VI | The letter | Sealed until **48 hours after the session ends**. Guides can never read it. |
-| VII | Hold | Review, name, and an inline account. Guests can go through the whole ritual; they only need an account to hold the time. |
-| — | Confirmation | Not a checkmark: the screen dims, a line of light draws, the words arrive one at a time. Exports an `.ics` file. |
-
-### After the booking — the owner does nothing
-
-- **Self-serve moves and releases.** Clients move their own session (`/record/:id/move`) under exactly the same rules as booking — one shared validator in Postgres — until 24 h before it begins. Calendar, buffers and the letter's seal follow automatically; the Guide sees a quiet "moved from" note.
-- **Handled for you.** Every session carries its own schedule — confirmation, briefing, a preparation note 48 h before, a reminder 24 h before, the letter unsealing — which moves when the session moves and is withdrawn if it's released. The Guide's week opens with a ledger of what they didn't have to do. (In the demo these are shown, not emailed.)
-- **Privacy holds here too:** a Guide's view never reveals whether a letter exists.
-
-The draft is kept on the device (it survives a reload or an email confirmation) and cleared once the time is held.
-
-**Edge cases handled on the core path:** a slot taken by someone else mid‑ritual (you return to *The hour* with an explanation and nothing you wrote is lost), a Guide's daily limit, a slot drifting under 24 h notice, double‑booking yourself, a changed timezone, clock changes (DST), cancellation (optimistic, with the letter returned unopened), network errors, private mode (in‑memory fallback), and email‑confirmation sign‑ups.
-
----
-
-## Data model (Supabase)
-
-`supabase/migrations/20260928000000_threshold_core.sql`
-
-| Table | Purpose |
+| Button | What happens |
 |---|---|
-| `profiles` | Mirrors `auth.users` (display name, timezone, role). Users can't change their own role. |
-| `thresholds` | The nine moments, with matching keywords. |
-| `session_types` | Forms and their durations (duration lives in data, not the client). |
-| `guides` · `guide_thresholds` | Guides, presence type, tags, timezone, `max_sessions_per_day`, `buffer_min ≥ 45`. |
-| `availability_rules` | Weekly windows in the Guide's **local** time. |
-| `sessions` | Type, status, buffers, `rescheduled_from`, and a `blocked_range tstzrange`, protected by an **exclusion constraint**: no two held spans (buffers included) of one Guide can overlap. |
-| `reflective_answers` | The three answers (null = "bring it into the room"). |
-| `future_self_letters` | Time‑locked letters. |
+| **Storm hits the busiest outdoor day** | Forecasts heavy rain on the day with the most outdoor jobs, fast-forwards to the 48-hour rain check, and sends the offers |
+| **+6 hours** | Runs the clock forward. Reminders, nudges and releases happen in order |
+| **Next job morning** | Jumps to 7:30 am on the next day with work |
+| **Reset** | A fresh week |
 
-**Row-level security**
-- Guests (`anon`) can read the catalogue (thresholds, forms, Guides and availability), so the ritual can start without an account.
-- `guide_busy_ranges()` gives guests busy times with nothing else attached: no names and no details.
-- Sessions and answers are visible only to the client and their Guide.
-- Letters are readable **only by their author, and only once `unlocks_at <= now()`**. No policy lets a Guide read them. `my_letters()` returns sealed envelopes without the body.
-- Nobody can insert or update sessions directly. All writes go through `book_session()` and `cancel_session()`.
+### Tour (about two minutes)
 
-**`book_session()`** and **`reschedule_session()`** share one validator, `assert_slot_open()` (not callable by clients). Booking is atomic and locks the Guide row. It checks auth, notice, the 15‑minute grid, that the whole span *including buffers* fits one availability window in the Guide's timezone, clashes, the daily limit and client overlap. The exclusion constraint backs it up if two bookings race. It returns stable error codes (`slot_taken`, `day_full`, `too_soon`, …) that the UI turns into plain language.
+1. `/` Type into "Ask the way you'd text a friend" (or tap an example). Tap one of the times.
+2. Finish the booking (garage or driveway, pick a time, deposit). You land on the confirmation, with the queued automations.
+3. `/owner` See your booking appear on the day sheet and the week, and the messages sent in Dario's name.
+4. Open **Demo controls**, then **Storm hits...**. Open the **Messages sent** tab, filter to **Rain**, and open a customer's booking link to choose a dry day.
+5. Press **+6 hours** a few times, or **Next job morning**, and watch unconfirmed bookings get nudged, released and offered to the waitlist.
 
-### Run against Supabase locally (Docker)
+## Architecture
 
-```bash
-npx supabase start          # applies supabase/migrations + supabase/seed.sql
-# copy the printed API URL + anon key into .env.local:
-#   VITE_SUPABASE_URL=http://127.0.0.1:54321
-#   VITE_SUPABASE_PUBLISHABLE_KEY=<anon key>
-npm run dev
+```
+src/lib/business.ts     the business: services, zones, drive matrix, hours, policies
+src/lib/engine.ts       the scheduling rules: checkDay, validate, findSlots, dryOptions, backfill
+src/lib/ops.ts          state transitions: book, move, cancel, confirm, rain, waitlist
+src/lib/automations.ts  the timeline of scheduled steps and the tick that runs them
+src/lib/inquiry.ts      the front door: parse a message, build a reply and a prefilled link
+src/lib/ledger.ts       "handled for you" counts and time-saved estimates
+src/lib/seed.ts         a believable week, generated relative to today
+src/lib/store.ts        persisted store + demo clock
 ```
 
-The whole ritual — GoTrue sign-up, `book_session`, sealed letters, a slot taken by a second real user mid-ritual, cancellation, the Guide calendar — has been walked end-to-end in a browser against this stack. supabase-js is code-split: it loads only when a backend is configured, and the demo build never ships it.
+All rules are pure functions over a `State` object, so the same code that runs in the browser is what the tests exercise. Every place that changes a booking goes through `validate()`, so a slot the calendar shows is a slot the server would accept.
 
-### Connect a hosted Supabase project
+### What is simulated
 
-1. Run `supabase/migrations/*.sql`, then `supabase/seed.sql`, in the SQL editor (or `supabase db reset` locally). Lovable's Supabase integration also accepts these migrations.
-2. Copy `.env.example` to `.env` and set `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`.
-3. Optional: turn off email confirmation for smoother demos. If it stays on, the ritual shows "check your email" and keeps the draft.
+Being honest about the boundary of the demo:
 
-The seed places every session relative to `now()` on real open days, so the product feels alive whenever it's seeded.
-
----
+- **No text or email is sent.** Messages are composed and logged; production would send them through Twilio and Resend.
+- **No card is charged.** The deposit is a state flag; production would use Stripe.
+- **The forecast is illustrative** (a deterministic Portland-like pattern, stable per date). Production would read a real weather API at the 48-hour check.
+- **Data lives in the visitor's browser** (`localStorage`). Production would move `State` into Postgres; the rules would move with it unchanged, and bookings would gain an exclusion constraint on time ranges.
+- **Seeded customers reply on their own** ("C" to confirm, picking a rain option, claiming a waitlist offer) so that both sides of each flow are visible in a single demo.
 
 ## Tests
 
 ```bash
-npm test          # slot engine, DST, cross‑timezone grouping, demo store parity, matching
-npm run test:db   # schema + RLS + booking RPC against Postgres (needs PGHOST/PGPORT/PGUSER)
-npm run e2e       # Playwright: the ritual, a mid-ritual clash, moving and releasing, Guide briefing, axe audits — desktop + mobile
+npm test        # 60+ unit tests: drive/refill/day-limit rules, booking races, rain, waitlist, seed validity on 21 different "today"s
+npm run e2e     # Playwright: full journeys and axe-core WCAG 2.1 AA audits, desktop + mobile
+npm run lint    # tsc --noEmit
 ```
 
-CI (`.github/workflows/ci.yml`) runs all three on every push, and checks that `supabase/seed.sql` is in sync with its TypeScript source.
+Unit tests cover, among others: a Westside job cannot start before 8:50, the third job needs the refill stop, a fourth job is refused, a slot taken mid-booking fails cleanly, moves are refused inside 24 hours, a cancelled slot is offered to a waitlisted customer and passed on after two hours, a storm moves outdoor jobs and never touches covered ones, and the seed is valid whichever day the app is opened.
 
-`supabase/tests/booking_rls.sql` runs 60+ assertions against plain Postgres using a small Supabase auth stub. For example: guests can't see sessions, a Guide can never read a letter, a sealed letter comes back without its body, a slot 75 min after a session is refused but one 90 min after is accepted, and a clash raises `slot_taken` even on direct table writes.
+## Accessibility
 
-`src/lib/data/seed.ts` is the single source of truth for demo data. After changing it, run `npm run seed:sql` to regenerate `supabase/seed.sql`.
-
----
-
-## Design system
-
-- **Palette:** deep charcoal ground, warm bone text, one oxidized-copper accent. There's no pure white and no blue, and dark is the default.
-- **Type:** *Instrument Serif* (slightly condensed) for headings and letters, *Inter* for UI.
-- **Motion:** fades, gentle height changes and a line of light, and nothing else. `prefers-reduced-motion` is respected.
-- **Visual grammar:** buffers are always drawn with the same copper hatch ("stillness"), so the rule reads the same everywhere: landing page, forms, calendar, record and Guide week.
-- **Accessibility:** native radio groups for every choice, an arrow-key date picker, focus moves to each step's heading, a skip link, `aria-live` notices, and `prefers-reduced-motion` honoured everywhere (steps swap instantly, nothing waits on an animation). axe-core reports **zero WCAG 2.1 AA violations across every route and every ritual step, desktop and mobile**, and `e2e/a11y.spec.ts` keeps it that way in CI. Even the quietest text tier is tuned to pass AA on every surface.
+Native radios and checkboxes for every choice, labelled fields with inline errors, focus moved to each step's heading, a skip link, `aria-live` results, visible focus rings, reduced-motion respected, and an axe-core audit on every page and every booking step in CI.
 
 ---
 
-Every person in the demo data is fictional. Threshold is not a crisis service. If you are in danger, contact your local emergency number or visit [findahelpline.com](https://findahelpline.com).
-
-*Built with [Lovable](https://lovable.dev).*
+Every person, address and phone number in the demo is fictional. *Built with [Lovable](https://lovable.dev).*
