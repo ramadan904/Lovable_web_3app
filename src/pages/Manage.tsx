@@ -113,7 +113,7 @@ export default function Manage() {
               <div className="rounded-md border border-primary-foreground/25 bg-primary-foreground/10 px-5 py-3 text-center">
                 <p className="text-xs font-semibold uppercase tracking-wider text-primary-foreground/75">Booking code</p>
                 <p className="font-display text-3xl font-extrabold tracking-wider">{job.code}</p>
-                <button type="button" onClick={copyCode} className="mt-1 inline-flex items-center gap-1.5 text-sm font-semibold text-sun underline underline-offset-4">
+                <button type="button" onClick={copyCode} className="mt-1 inline-flex items-center gap-1.5 text-sm font-semibold text-primary-foreground underline underline-offset-4">
                   <Copy className="size-3.5" aria-hidden="true" /> Copy code
                 </button>
               </div>
