@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { useNow } from "@/hooks/useNow";
 import { timelineFor } from "@/lib/automations";
 import { ADDONS, BUSINESS, FREE_CHANGE_H, PARKING, SERVICES, ZONES, dollars, hoursLabel, isCovered } from "@/lib/business";
-import { downloadIcs } from "@/lib/ics";
+import { CAN_DOWNLOAD, downloadIcs } from "@/lib/ics";
 import { ACTIVE, BookingError } from "@/lib/model";
 import { getJob } from "@/lib/ops";
 import { actions, useStore } from "@/lib/store";
@@ -69,7 +69,7 @@ export default function Manage() {
               <h1 className="mt-1 text-3xl font-extrabold md:text-4xl">{fmtDayLong(job.startMs)} at {fmtTime(job.startMs)}</h1>
               <p className="mt-2 max-w-xl text-primary-foreground/85">{BUSINESS.ownerFirst} and {BUSINESS.van} will be at {job.address}. Nothing else to do: we'll text you a prep note, then a one-tap confirm the day before.</p>
             </div>
-            <Button variant="sun" size="lg" onClick={() => downloadIcs(job)}><CalendarPlus /> Add to calendar</Button>
+            {CAN_DOWNLOAD && <Button variant="sun" size="lg" onClick={() => downloadIcs(job)}><CalendarPlus /> Add to calendar</Button>}
           </div>
         </div>
       )}
@@ -117,7 +117,7 @@ export default function Manage() {
               <div><dt className="eyebrow">Includes</dt><dd>{[SERVICES[job.service].name, ...job.addons.map((a) => ADDONS[a].name)].join(", ")}</dd></div>
               <div><dt className="eyebrow">Total</dt><dd className="font-semibold">{dollars(job.totalCents)} <span className="font-normal text-muted-foreground">({dollars(job.depositCents)} deposit {job.depositState === "refunded" ? "refunded" : job.depositState === "kept" ? "kept" : job.depositState === "applied" ? "applied" : "paid"})</span></dd></div>
             </dl>
-            {active && <Button variant="outline" size="sm" className="mt-5" onClick={() => downloadIcs(job)}><CalendarPlus /> Add to calendar</Button>}
+            {active && CAN_DOWNLOAD && <Button variant="outline" size="sm" className="mt-5" onClick={() => downloadIcs(job)}><CalendarPlus /> Add to calendar</Button>}
           </section>
 
           {active && <AccessCard key={job.id} id={job.id} gate={job.access.gateCode} notes={job.access.notes} />}

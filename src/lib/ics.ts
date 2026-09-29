@@ -25,3 +25,6 @@ export function downloadIcs(job: Job) {
   a.click();
   URL.revokeObjectURL(url);
 }
+
+/** The hosted single-file build runs in a frame that blocks downloads, so it hides the button. */
+export const CAN_DOWNLOAD = import.meta.env.VITE_ROUTER !== "memory";
