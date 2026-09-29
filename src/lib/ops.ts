@@ -4,7 +4,7 @@ import {
   BUSINESS, DEPOSIT_CENTS, FREE_CHANGE_H, RAIN_AUTO_H, WAITLIST_OFFER_H, quote, zoneForZip,
   type AddonKey, type Parking, type ServiceKey, type VehicleKind, type ZoneKey,
 } from "./business";
-import { backfillCandidate, dryOptions, validate } from "./engine";
+import { backfillCandidate, dryOptions, neighbourDeal, validate } from "./engine";
 import { composeForJob, composeOffer } from "./messages";
 import { ACTIVE, BookingError, type ActivityEvent, type Job, type Message, type MessageKind, type State, type WaitlistEntry } from "./model";
 import { HOUR, fmtDay, fmtTime, localDate } from "./time";
@@ -96,6 +96,8 @@ export function createJob(state: State, input: BookingInput, nowMs: number): { s
   const problem = validate(s, { startMs: input.startMs, durationMin: q.durationMin, zone }, nowMs);
   if (problem) throw problemToError(problem);
 
+  const deal = neighbourDeal(s, { startMs: input.startMs, durationMin: q.durationMin, zone }, undefined);
+
   const seq = nextSeq(s);
   const soon = input.startMs - nowMs < FREE_CHANGE_H * HOUR;
   const job: Job = {
@@ -114,7 +116,9 @@ export function createJob(state: State, input: BookingInput, nowMs: number): { s
     access: { ...input.access },
     startMs: input.startMs,
     durationMin: q.durationMin,
-    totalCents: q.totalCents,
+    totalCents: q.totalCents - (deal?.discountCents ?? 0),
+    discountCents: deal?.discountCents ?? 0,
+    dealMin: deal?.savedMin ?? 0,
     depositCents: DEPOSIT_CENTS,
     depositState: "held",
     movedFrom: [],

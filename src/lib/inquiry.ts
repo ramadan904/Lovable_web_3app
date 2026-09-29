@@ -5,7 +5,7 @@ import {
   ADDONS, NEIGHBORHOODS, SERVICES, ZONES, dollars, hoursLabel, quote, zoneForZip,
   type AddonKey, type Parking, type ServiceKey, type VehicleKind, type ZoneKey,
 } from "./business";
-import { findSlots, isRainRisk } from "./engine";
+import { findSlots, isRainRisk, neighbourDeal } from "./engine";
 import { APP_HOST } from "./messages";
 import type { Inquiry, State } from "./model";
 import { pushEvent, pushMessage } from "./ops";
@@ -123,7 +123,9 @@ export function suggestDetailed(state: State, p: ParsedInquiry, nowMs: number, d
       if (p.part === "afternoon" && m < 12 * 60) return false;
       return !(outdoor && isRainRisk(state, ms, "driveway"));
     });
-    if (slots.length) picks.push(slots[0]);
+    // Prefer the slot that earns a neighbour deal: cheaper for them, less driving for Dario.
+    const withDeal = slots.find((ms) => neighbourDeal(state, { startMs: ms, durationMin, zone }));
+    if (slots.length) picks.push(withDeal ?? slots[0]);
   }
   // Nothing that matches the asked-for day or deadline: widen to the next open days.
   if (!picks.length && (p.date || p.before || p.part)) {
@@ -155,7 +157,12 @@ export function answerInquiry(state: State, from: string, text: string, nowMs: n
     if (zone) {
       const found = suggestDetailed(state, p, nowMs, q.durationMin, zone);
       suggested = found.picks;
-      const times = suggested.map((ms) => `${fmtDay(ms)} ${fmtTime(ms)}`).join(" · ");
+      const times = suggested
+        .map((ms) => {
+          const d = neighbourDeal(state, { startMs: ms, durationMin: q.durationMin, zone });
+          return `${fmtDay(ms)} ${fmtTime(ms)}${d ? ` (${dollars(d.discountCents)} off, Dario's already nearby)` : ""}`;
+        })
+        .join(" · ");
       const ask = p.date ? "that day" : p.before ? `before ${fmtDay(atLocal(p.before, 12 * 60))}` : "then";
       reply = suggested.length
         ? `Yes, we come to you in ${ZONES[zone].name}. ${what}: ${dollars(q.totalCents)}, about ${hoursLabel(q.durationMin)}. ${found.widened ? `Nothing dry is free ${ask}, so here are the next openings: ` : "Open times: "}${times}. Tap one to hold it (a ${dollars(2500)} deposit comes off the total): ${APP_HOST}${bookingLink({ vehicle: p.vehicle, service: p.service ?? service, addons: p.addons, zip: p.zip, zone, parking: p.parking, startMs: suggested[0] })}`

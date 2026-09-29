@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect } from "react";
-import { BrowserRouter, Route, Routes, useLocation } from "react-router-dom";
+import { BrowserRouter, MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { Layout } from "@/components/Layout";
 import { Toaster } from "@/components/ui/sonner";
 import Index from "./pages/Index";
@@ -16,8 +16,11 @@ function ScrollToTop() {
   return null;
 }
 
+// The single-file "artifact" build is hosted at a URL it doesn't control, so it routes in memory.
+const Router = import.meta.env.VITE_ROUTER === "memory" ? MemoryRouter : BrowserRouter;
+
 const App = () => (
-  <BrowserRouter>
+  <Router>
     <Toaster />
     <ScrollToTop />
     <Suspense fallback={<div className="min-h-[60vh]" aria-busy="true" aria-label="Loading" />}>
@@ -32,7 +35,7 @@ const App = () => (
         </Route>
       </Routes>
     </Suspense>
-  </BrowserRouter>
+  </Router>
 );
 
 export default App;

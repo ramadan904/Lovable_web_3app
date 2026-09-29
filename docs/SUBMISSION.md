@@ -41,6 +41,8 @@ His real-world friction, which the build takes on directly:
 - **Rain rescheduling:** 48 hours out, an outdoor job in a forecast storm is offered the nearest dry slots; if the customer doesn't pick, the first is taken.
 - **No-show defence:** unconfirmed slots are released 3 hours out and offered to the waitlist, first whose job fits (checked against the drive), two hours to claim.
 - **Self-serve** move and cancel until 24 hours ahead, gate codes editable by the customer, refunds automatic.
+- **Neighbour deals**: route-density pricing. When a slot sits next to another job in the same area, Dario drives less, and the customer gets 50¢ off for every minute he saves. It fills the gaps in his route, cuts his driving, and gives customers a reason to pick the slot that's best for him.
+- **"Where's Bertha?"**: a live van tracker on a map of Portland. Customers watch the van drive to them with a live ETA, so nobody texts "where are you?". Dario can scrub and replay his whole day. Privacy is built in: customers only ever see their own stop named.
 - **"Handled for you"** ledger on Dario's console: messages sent, bookings taken, reschedules, gaps refilled, and a transparent estimate of hours saved. "Needs you" shows only what genuinely needs a human.
 
 ## Before / after
@@ -51,6 +53,7 @@ His real-world friction, which the build takes on directly:
 | Confirming a booking | Dario types, then waits | Customer taps a time |
 | Rainy Tuesday | Evening of texts, reschedules | Offers sent, customers pick, first dry option taken if not |
 | Reminders | When he remembers | Scheduled, and they move with the job |
+| "Where are you?" | A text while he's driving | A live map with an ETA |
 | No-shows | A wasted half-day | Deposit, confirm-tap, release at 3 h, waitlist refill |
 | Gate codes | Texted at 7 am | On the morning sheet |
 | Overbooking | Judgement | Impossible: the engine refuses |
@@ -72,6 +75,7 @@ Record at 1440×900 (or a phone-width take for the mobile beat). Open **Demo con
 | 0:12 | Ask box | Tap the Subaru example → **Get real times** | "A customer writes the way they'd text a friend. Fernhill reads it, prices it, checks Dario's drive time, and offers three real slots. In seconds." |
 | 0:28 | Tap a time → Where step | Fill address, pick **Driveway** | "It knows her Outback with dog hair takes two and a half hours. She says the car is outside, and that matters later." |
 | 0:45 | When step | Point at day tiles and rain chips | "Only reachable times. Wet days are flagged; a dry day is recommended." |
+| 0:47 | When step, Southeast zip | Point at the "−$10" times | "And when Dario's already in her neighbourhood, the slot next to that job is cheaper. Every minute he doesn't drive is fifty cents off." |
 | 0:55 | You step → **Book** | Name, phone, email → Book | "A twenty-five dollar deposit holds it. Confirmed instantly." |
 | 1:05 | Confirmation | Scroll the queue | "Nothing left for anyone to do. Prep note, a one-tap confirm, a rain check, an on-my-way text are already queued." |
 | 1:15 | `/owner` | Show greeting, ledger tiles | "Dario's side. 'Nothing needs you' except one thing that really does: a request he doesn't offer. Everything else is done." |
@@ -79,6 +83,7 @@ Record at 1440×900 (or a phone-width take for the mobile beat). Open **Demo con
 | 1:45 | **Demo controls → Storm** | Click | "Now heavy rain is forecast for his busiest day." |
 | 1:52 | Messages → Rain filter | Point at rain offers | "Every customer with an outdoor car has been texted the nearest dry times. Covered cars are untouched." |
 | 2:05 | Open a customer link | Tap a dry option | "She picks Thursday. Her reminders move with her. Dario did nothing." |
+| 2:12 | Scroll to **Where's Bertha?** → **Play the day** | Let the van drive | "And instead of texting 'where are you?', she watches Bertha drive to her. Other customers' stops are anonymous." |
 | 2:15 | Waitlist tab | Show an offer out | "Her old slot went to the first person on the waitlist whose job fits. Nobody phoned anybody." |
 | 2:25 | **+6 hours** ×2 | Show a nudge/release | "And if someone never confirms, the slot is released three hours before, and refilled." |
 | 2:35 | Ledger | Point at hours saved | "Hours of admin, gone. Fernhill Mobile Detail. Built with Lovable." |

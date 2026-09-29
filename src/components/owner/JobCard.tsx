@@ -62,6 +62,7 @@ export function JobCard({ job, stormDays, compact = false }: { job: Job; stormDa
         </dl>
         {(job.status === "booked") && <p className="rounded-md bg-sun-soft px-3 py-2 text-sm text-sun-ink">If they haven't confirmed by {fmtTime(job.startMs - 3 * HOUR)}, the slot goes to the waitlist automatically.</p>}
         {job.rainOffer && <p className="rounded-md bg-rain-soft px-3 py-2 text-sm text-rain">Rain offer sent. Options are waiting on the customer; the first is taken automatically if they don't pick.</p>}
+        {(job.dealMin ?? 0) > 0 && <p className="rounded-md bg-fern-soft px-3 py-2 text-sm text-fern-ink">Neighbour deal: right next to another {ZONES[job.zone].name} job, so about {job.dealMin} min less driving. The customer paid {dollars(job.discountCents)} less.</p>}
         {job.movedFrom.length > 0 && <p className="text-sm text-muted-foreground">Moved from {fmtDay(job.movedFrom[job.movedFrom.length - 1])} by the customer. You did nothing.</p>}
         {job.status === "cancelled" && <p className="flex items-center gap-2 text-sm text-muted-foreground"><Ban className="size-4" aria-hidden="true" />{job.closedReason}</p>}
       </div>

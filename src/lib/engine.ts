@@ -150,6 +150,35 @@ export function backfillCandidate(
 
 export { forecastFor };
 
+/** Every minute of driving Dario doesn't do is this much off the customer's bill. */
+export const DEAL_CENTS_PER_MIN = 50;
+
+export interface Deal {
+  discountCents: number;
+  /** Driving Dario saves versus a separate round trip from the base. */
+  savedMin: number;
+  neighbour: Job;
+}
+
+/**
+ * Route-density pricing. If the slot sits directly before or after a job in the same zone,
+ * Dario makes one trip instead of two, and the customer gets the saving as a discount.
+ */
+export function neighbourDeal(state: State, cand: Placement, excludeId?: string): Deal | null {
+  if (cand.zone === HOME_ZONE) return null;
+  const date = localDate(cand.startMs);
+  const day = activeJobs(state)
+    .filter((j) => j.id !== excludeId && localDate(j.startMs) === date)
+    .sort((a, b) => a.startMs - b.startMs);
+  const before = [...day].reverse().find((j) => j.startMs + j.durationMin * MIN <= cand.startMs);
+  const after = day.find((j) => j.startMs >= cand.startMs + cand.durationMin * MIN);
+  const neighbour = [before, after].find((j) => j && j.zone === cand.zone);
+  if (!neighbour) return null;
+  const savedMin = 2 * (travelMin(HOME_ZONE, cand.zone) - travelMin(cand.zone, cand.zone));
+  if (savedMin < 10) return null;
+  return { discountCents: savedMin * DEAL_CENTS_PER_MIN, savedMin, neighbour };
+}
+
 export interface RouteBlock {
   kind: "load" | "drive" | "refill" | "job" | "home";
   startMin: number;

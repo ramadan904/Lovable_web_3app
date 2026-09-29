@@ -24,6 +24,9 @@ export interface Ledger {
   minutes: number;
   jobsDone: number;
   revenueCents: number;
+  /** Minutes of driving saved, and dollars given back, by neighbour deals booked in the window. */
+  driveSavedMin: number;
+  dealCents: number;
 }
 
 export function ledgerFor(state: State, nowMs: number, days = 7): Ledger {
@@ -44,7 +47,15 @@ export function ledgerFor(state: State, nowMs: number, days = 7): Ledger {
     minutes: 0,
     jobsDone: done.length,
     revenueCents: done.reduce((n, j) => n + j.totalCents, 0),
+    driveSavedMin: 0,
+    dealCents: 0,
   };
+  for (const j of state.jobs) {
+    if (j.createdAt >= since && j.createdAt <= nowMs && (j.dealMin ?? 0) > 0 && j.status !== "cancelled") {
+      l.driveSavedMin += j.dealMin;
+      l.dealCents += j.discountCents;
+    }
+  }
   l.minutes =
     l.messages * MINUTES_SAVED.message + l.bookings * MINUTES_SAVED.booking + l.moves * MINUTES_SAVED.move +
     l.rainMoves * MINUTES_SAVED.rain + l.backfilled * MINUTES_SAVED.backfill + l.inquiries * MINUTES_SAVED.inquiry;

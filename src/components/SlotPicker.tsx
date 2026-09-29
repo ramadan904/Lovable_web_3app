@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { CloudRain, Umbrella } from "lucide-react";
-import { isCovered, type Parking, type ZoneKey } from "@/lib/business";
-import { slotsByDay } from "@/lib/engine";
+import { ZONES, dollars, isCovered, type Parking, type ZoneKey } from "@/lib/business";
+import { neighbourDeal, slotsByDay } from "@/lib/engine";
 import { localMinutes, fmtDate, fmtTime } from "@/lib/time";
 import { useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -15,12 +15,14 @@ interface Props {
   value: number | null;
   onChange: (startMs: number) => void;
   excludeJobId?: string;
+  /** Show neighbour deals: only when booking new (a move keeps the deal it was booked with). */
+  showDeals?: boolean;
   /** Rendered when nothing is open, so the caller can offer the waitlist. */
   whenEmpty?: React.ReactNode;
 }
 
 /** Real availability only: every time listed here passed the same rules the server enforces. */
-export function SlotPicker({ durationMin, zone, parking, now, value, onChange, excludeJobId, whenEmpty }: Props) {
+export function SlotPicker({ durationMin, zone, parking, now, value, onChange, excludeJobId, showDeals = false, whenEmpty }: Props) {
   const state = useStore();
   const covered = isCovered(parking);
   const minute = Math.floor(now / 60_000);
@@ -29,6 +31,7 @@ export function SlotPicker({ durationMin, zone, parking, now, value, onChange, e
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [state, durationMin, zone, minute, excludeJobId],
   );
+  const dealOf = (ms: number) => (showDeals ? neighbourDeal(state, { startMs: ms, durationMin, zone }, excludeJobId) : null);
   const withSlots = days.filter((d) => d.slots.length);
   const bestDry = withSlots.find((d) => covered || !d.forecast.wet);
 
@@ -58,7 +61,7 @@ export function SlotPicker({ durationMin, zone, parking, now, value, onChange, e
     <div className="space-y-5">
       <fieldset>
         <legend className="mb-2 text-sm font-semibold">Pick a day</legend>
-        <div className="-mx-1 flex snap-x gap-2 overflow-x-auto px-1 pb-2">
+        <div className="-mx-1 flex snap-x gap-2 overflow-x-auto px-1 pb-2 pt-3">
           {days.filter((d) => d.open).map((d) => {
             const disabled = !d.slots.length;
             const active = selected?.date === d.date;
@@ -87,6 +90,9 @@ export function SlotPicker({ durationMin, zone, parking, now, value, onChange, e
                   {d.forecast.rain}%
                 </span>
                 <span className="text-[0.7rem] font-medium opacity-80">{disabled ? "Full" : `${d.slots.length} times`}</span>
+                {!disabled && d.slots.some((ms) => dealOf(ms)) && (
+                  <span className={cn("mt-0.5 rounded-full px-1.5 py-px text-[0.65rem] font-bold", active ? "bg-sun text-sun-ink" : "bg-sun-soft text-sun-ink")}>Deals</span>
+                )}
                 <span className="sr-only">{dry ? "Dry" : "Rain likely"}</span>
               </button>
             );
@@ -107,6 +113,11 @@ export function SlotPicker({ durationMin, zone, parking, now, value, onChange, e
               <span>Rain is likely this day and your car will be outdoors. You can still book it: if the forecast holds, we'll text you two days ahead with dry times and move you for free.{bestDry && !bestDry.forecast.wet ? ` The best dry day is ${fmtDate(bestDry.date, "EEEE")}.` : ""}</span>
             </p>
           )}
+          {showDeals && selected.slots.some((ms) => dealOf(ms)) && (
+            <p role="note" className="rounded-md border border-sun/50 bg-sun-soft p-3 text-sm text-sun-ink">
+              <strong>Neighbour deal.</strong> Dario is already in {ZONES[zone].name} this day. The times marked with a discount sit right next to that job, so he makes one trip instead of two. Every minute he doesn't drive is 50¢ off your bill.
+            </p>
+          )}
           {[["Morning", morning], ["Afternoon", afternoon]].map(([label, slots]) =>
             (slots as number[]).length ? (
               <fieldset key={label as string}>
@@ -118,12 +129,14 @@ export function SlotPicker({ durationMin, zone, parking, now, value, onChange, e
                       type="button"
                       aria-pressed={value === ms}
                       onClick={() => onChange(ms)}
+                      aria-label={dealOf(ms) ? `${fmtTime(ms)}, neighbour deal, ${dollars(dealOf(ms)!.discountCents)} off` : undefined}
                       className={cn(
-                        "h-12 rounded-md border bg-card text-[0.95rem] font-semibold transition-colors",
+                        "flex h-12 flex-col items-center justify-center rounded-md border bg-card text-[0.95rem] font-semibold leading-tight transition-colors",
                         value === ms ? "border-primary bg-primary text-primary-foreground shadow-card" : "hover:border-foreground/60 hover:bg-muted",
                       )}
                     >
                       {fmtTime(ms)}
+                      {dealOf(ms) && <span className={cn("text-[0.7rem] font-bold", value === ms ? "text-sun" : "text-fern")}>−{dollars(dealOf(ms)!.discountCents)}</span>}
                     </button>
                   ))}
                 </div>

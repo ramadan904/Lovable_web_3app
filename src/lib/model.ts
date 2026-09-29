@@ -28,6 +28,10 @@ export interface Job {
   startMs: number;
   durationMin: number;
   totalCents: number;
+  /** Neighbour deal already taken off totalCents, locked at booking. */
+  discountCents: number;
+  /** Minutes of driving the deal saves Dario, for the ledger. */
+  dealMin: number;
   depositCents: number;
   depositState: "held" | "refunded" | "kept" | "applied";
   /** Earlier start times, if the job has been moved. */

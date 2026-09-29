@@ -33,8 +33,10 @@ async function bookThroughUi(page: Page, name = "Test Driver", dayIndex = 0) {
 /** Use a demo control. On phones the panel closes itself after each action, so open it on demand. */
 async function demo(page: Page, name: RegExp) {
   const open = page.getByRole("button", { name: "Open demo controls" });
+  const target = page.getByRole("button", { name });
+  await open.or(target).first().waitFor();
   if (await open.isVisible()) await open.click();
-  await page.getByRole("button", { name }).click();
+  await target.click();
 }
 
 test.beforeEach(async ({ page }) => {
@@ -43,7 +45,8 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("a customer books end to end and Dario finds it on his sheet, having typed nothing", async ({ page }) => {
-  await bookThroughUi(page);
+  // A later day, so the 24-hour reminder is part of the plan (inside 24 hours there is none).
+  await bookThroughUi(page, "Test Driver", 1);
   await expect(page).toHaveURL(/\/b\/FH-[A-Z0-9]{4}\?new=1/);
   // The confirmation email is already in their thread and the automations are queued.
   await expect(page.getByText("Booking confirmation")).toBeVisible();
@@ -123,4 +126,101 @@ test("the calendar never offers a time that breaks the drive rules", async ({ pa
   expect(times.length).toBeGreaterThan(10);
   expect(times).not.toContain("8:00 AM");
   expect(times).not.toContain("8:30 AM");
+});
+
+test.describe("Where's Bertha?", () => {
+  const FIRST_NAMES = /Maya|Jordan|Sam\b|Renata|Ben\b|Lila|Marcus|Hannah|Owen/;
+
+  test("Dario can scrub and play back his whole day on the map", async ({ page }) => {
+    await page.goto("/owner");
+    const map = page.getByRole("region", { name: "Where's Bertha?" });
+    await expect(map).toBeVisible();
+    const scrub = map.getByRole("slider", { name: /Scrub through the day/ });
+    await scrub.fill("560"); // 9:20 am
+    await expect(map.getByText(/Bertha is (driving|detailing|setting up|loading|at the base)/).first()).toBeVisible();
+    const chip = map.getByText(/Preview of the day|Replay|Live/).first();
+    const before = await chip.textContent();
+    await map.getByRole("button", { name: "Play the day" }).click();
+    await expect(async () => expect(await chip.textContent()).not.toBe(before)).toPass({ timeout: 5000 });
+    await map.getByRole("button", { name: "Pause" }).click();
+  });
+
+  test("a customer sees their own stop and ETA, and no other customer's name", async ({ page }) => {
+    await bookThroughUi(page, "Privacy Pat", 1);
+    const map = page.getByRole("region", { name: "Where's Bertha?" });
+    await expect(map).toBeVisible();
+    await expect(map.getByText(/job before yours|jobs before yours|You're next|starts the day at 8:00|On the way|arrived|Detailing/).first()).toBeVisible();
+    const drawn = (await map.locator("svg[role=img] text").allTextContents()).join(" ");
+    expect(drawn).toContain("You");
+    expect(drawn).not.toMatch(FIRST_NAMES);
+    expect(await map.locator("svg[role=img]").getAttribute("aria-label")).not.toMatch(FIRST_NAMES);
+    // Their own ETA follows the scrubber: at 8:00 nothing has started.
+    await map.getByRole("slider").fill("470");
+    await expect(map.getByText(/Bertha is (loading|at the base)/).first()).toBeVisible();
+  });
+
+  test("on the morning of the job the map is live and follows the demo clock", async ({ page }) => {
+    await bookThroughUi(page, "Live Larry", 1);
+    // Like a real customer: confirm when the reminder arrives, while the day approaches in 6-hour steps.
+    const live = page.getByText(/Live · /);
+    const confirm = page.getByRole("button", { name: /Yes, I'll be there/ });
+    for (let i = 0; i < 30 && !(await live.isVisible()); i++) {
+      if (await confirm.isVisible()) await confirm.click();
+      await demo(page, /\+6 hours/);
+    }
+    await expect(live).toBeVisible();
+  });
+});
+
+test("every fast-forward click moves the demo clock on screen straight away", async ({ page }) => {
+  await page.goto("/owner");
+  const read = async () => {
+    const open = page.getByRole("button", { name: "Open demo controls" });
+    const panel = page.getByRole("region", { name: "Demo controls" });
+    await open.or(panel).first().waitFor();
+    if (await open.isVisible()) await open.click();
+    return (await page.getByRole("region", { name: "Demo controls" }).getByText(/It's \w{3} \d/).textContent()) ?? "";
+  };
+  const seen = new Set<string>([await read()]);
+  for (let i = 0; i < 3; i++) {
+    await page.getByRole("button", { name: /\+6 hours/ }).click();
+    await expect(async () => expect(seen.has(await read())).toBe(false)).toPass({ timeout: 3000 });
+    seen.add(await read());
+  }
+  expect(seen.size).toBe(4);
+});
+
+test("a neighbour deal shows on the calendar, comes off the price, and follows the booking", async ({ page }) => {
+  await page.goto("/book?v=sedan&s=express&zip=97202&p=garage");
+  await page.getByLabel("Street address").fill("1 Deal St");
+  await page.getByRole("button", { name: /Continue/ }).click();
+
+  // Look through the days for a slot next to another Southeast job.
+  const dealChip = page.locator("fieldset button[aria-pressed]").filter({ hasText: /−\$\d+/ });
+  const days = dayButtons(page);
+  const n = await days.count();
+  let found = false;
+  for (let i = 0; i < n && !found; i++) {
+    await days.nth(i).click();
+    if ((await dealChip.count()) > 0) found = true;
+  }
+  expect(found, "some day has a neighbour-deal slot").toBe(true);
+  await expect(page.getByText("Neighbour deal.")).toBeVisible();
+
+  const chip = dealChip.first();
+  const label = (await chip.getAttribute("aria-label")) ?? "";
+  const off = Number(label.match(/\$(\d+) off/)?.[1]);
+  await chip.click();
+  const summary = page.getByRole("complementary", { name: "Your booking" });
+  await expect(summary.getByText("Neighbour deal")).toBeVisible();
+  await expect(summary.getByText(`−$${off}`)).toBeVisible();
+  await expect(summary.getByText(`$${85 - off}`, { exact: true })).toBeVisible(); // express sedan is $85
+
+  await page.getByRole("button", { name: /Continue/ }).click();
+  await page.getByLabel("Your name").fill("Deal Dana");
+  await page.getByLabel("Mobile number").fill("(503) 555-0100");
+  await page.getByLabel("Email").fill("dana@example.com");
+  await page.getByRole("button", { name: /Book it/ }).click();
+  await expect(page.getByText("You're booked", { exact: true })).toBeVisible();
+  await expect(page.getByText(`−$${off} neighbour deal`)).toBeVisible();
 });

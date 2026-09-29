@@ -6,12 +6,13 @@ import { atLocal, fmtDate, fmtTime, localDate, weekdayOf } from "@/lib/time";
 import { forecastFor } from "@/lib/weather";
 import { cn } from "@/lib/utils";
 import { WeatherChip } from "../Weather";
+import { Tracker } from "../Tracker";
 import { JobCard } from "./JobCard";
 
 const clock = (date: string, min: number) => fmtTime(atLocal(date, min));
 
 /** The morning sheet: the route in order, with every code and note already in place. */
-export function DaySheet({ state, date }: { state: State; date: string }) {
+export function DaySheet({ state, date, now }: { state: State; date: string; now: number }) {
   const jobs = state.jobs.filter((j) => localDate(j.startMs) === date && ["booked", "confirmed", "completed"].includes(j.status)).sort((a, b) => a.startMs - b.startMs);
   const f = forecastFor(date, state.stormDays);
   const blocks = routeBlocks(jobs);
@@ -25,6 +26,8 @@ export function DaySheet({ state, date }: { state: State; date: string }) {
         <WeatherChip f={f} />
         <span className="text-sm text-muted-foreground">{jobs.length} {jobs.length === 1 ? "job" : "jobs"} · ${Math.round(revenue / 100).toLocaleString()}</span>
       </div>
+
+      {jobs.length > 0 && <Tracker state={state} date={date} now={now} />}
 
       {closed && <p className="rounded-md bg-muted p-4 text-muted-foreground">Closed. Mondays are van maintenance, Sundays are rest.</p>}
       {!closed && !jobs.length && <p className="rounded-md bg-muted p-4 text-muted-foreground">Nothing booked yet. The booking page is still showing this day as open.</p>}
