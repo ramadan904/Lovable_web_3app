@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { CloudLightning, FastForward, RotateCcw, SunMedium, FlaskConical, X } from "lucide-react";
+import { CloudLightning, FastForward, Moon, RotateCcw, SunMedium, FlaskConical, UserX, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { useNow } from "@/hooks/useNow";
@@ -55,6 +55,14 @@ export function DemoBar() {
       <div className="grid gap-2">
         <Button variant="sun" size="sm" onClick={storm}><CloudLightning /> Storm hits the busiest outdoor day</Button>
         <div className="grid grid-cols-2 gap-2">
+          <Button variant="outline" size="sm" className="border-background/30 bg-transparent text-background hover:bg-background/10 hover:text-background" onClick={() => { done(); actions.fastForward(1); toast("Fast-forwarded 1 hour", { description: "Reminders, nudges and releases fire as their times pass." }); }}>
+            <FastForward /> +1 hour
+          </Button>
+          <Button variant="outline" size="sm" className="border-background/30 bg-transparent text-background hover:bg-background/10 hover:text-background" onClick={() => { done(); actions.jumpToEndOfDay(); toast("Jumped to 5:30 pm", { description: "The day's jobs are done and aftercare texts are on their way." }); }}>
+            <Moon /> End of day
+          </Button>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
           <Button variant="outline" size="sm" className="border-background/30 bg-transparent text-background hover:bg-background/10 hover:text-background" onClick={() => { done(); actions.fastForward(6); toast(`Fast-forwarded 6 hours`, { description: "Everything scheduled in between just happened." }); }}>
             <FastForward /> +6 hours
           </Button>
@@ -62,6 +70,14 @@ export function DemoBar() {
             <SunMedium /> Next job morning
           </Button>
         </div>
+        <Button variant="outline" size="sm" className="border-background/30 bg-transparent text-background hover:bg-background/10 hover:text-background" onClick={() => {
+          done();
+          const who = actions.demoCancel();
+          if (who) toast.success(`${who} cancelled`, { description: "Watch the Waitlist panel: the slot is offered to the first person whose job fits." });
+          else toast("Nothing far enough ahead to cancel for free.", { description: "Reset the demo for a fresh week." });
+        }}>
+          <UserX /> A customer cancels
+        </Button>
         <div className="grid grid-cols-2 gap-2">
           <Button variant="outline" size="sm" className="border-background/30 bg-transparent text-background hover:bg-background/10 hover:text-background" onClick={() => { done(); actions.clearStorm(); toast("Forecast cleared"); }}>
             Clear storm

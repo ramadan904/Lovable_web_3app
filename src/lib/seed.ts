@@ -90,7 +90,7 @@ function addSeedJob(s: State, spec: Spec, date: string, createdAt: number): Job 
     vehicle: { kind: spec.vehicle[0], label: spec.vehicle[1] }, service: spec.service, addons, zip: spec.zip, zone,
     address: spec.address, parking: spec.parking, access: { gateCode: spec.gate ?? "", notes: spec.notes ?? "" },
     startMs: atLocal(date, mins(spec.at)), durationMin: q.durationMin, totalCents: q.totalCents, discountCents: 0, dealMin: 0, depositCents: 2500, depositState: "held",
-    movedFrom: [], confirmedAt: null, closedAt: null, closedReason: null, rainOffer: null, ownerFlag: null,
+    movedFrom: [], confirmedAt: null, closedAt: null, closedReason: null, rainOffer: null, ownerFlag: null, rainAffected: false,
     source: "web", simReplies: spec.sim ?? false,
   };
   s.jobs.push(job);
@@ -169,6 +169,7 @@ export function seedState(nowMs: number): State {
   if (andre) {
     const from = andre.startMs - DAY;
     andre.movedFrom.push(from);
+    andre.rainAffected = true;
     const offerAt = andre.startMs - 50 * HOUR;
     sendForJob(s, andre, "rain_offer", offerAt, { options: [andre.startMs, andre.startMs + DAY, andre.startMs + 2 * DAY], autoAt: offerAt + 6 * HOUR });
     sendForJob(s, andre, "rain_moved", offerAt + 90 * MIN, { from });

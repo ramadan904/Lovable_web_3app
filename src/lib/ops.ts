@@ -127,6 +127,7 @@ export function createJob(state: State, input: BookingInput, nowMs: number): { s
     closedReason: null,
     rainOffer: null,
     ownerFlag: null,
+    rainAffected: false,
     source: input.source ?? "web",
     simReplies: input.simReplies ?? false,
   };
@@ -163,6 +164,7 @@ export function moveJob(state: State, id: string, newStartMs: number, nowMs: num
   const oldStart = job.startMs;
   const window = { start: oldStart, end: oldStart + job.durationMin * 60_000 };
   job.movedFrom.push(oldStart);
+  if (by !== "customer") job.rainAffected = true;
   job.startMs = newStartMs;
   job.rainOffer = null;
   job.ownerFlag = null;
@@ -180,10 +182,13 @@ export function cancelJob(state: State, id: string, nowMs: number, reason = "Can
   const s = clone(state);
   const job = findJob(s, id);
   if (!ACTIVE.includes(job.status)) throw new BookingError("not_open", "That booking is no longer active.");
-  const refunded = job.startMs - nowMs >= FREE_CHANGE_H * HOUR;
+  // Free until 24 h before, and always free once rain has touched the booking ("$25 holds the slot.
+  // Fully refundable if we have to move you for rain").
+  const early = job.startMs - nowMs >= FREE_CHANGE_H * HOUR;
+  const refunded = early || job.rainAffected;
   job.status = "cancelled";
   job.closedAt = nowMs;
-  job.closedReason = reason;
+  job.closedReason = !early && job.rainAffected ? "Cancelled after a rain change (full refund)" : reason;
   job.depositState = refunded ? "refunded" : "kept";
   job.rainOffer = null;
   sendForJob(s, job, "cancelled", nowMs, { refunded });
@@ -222,6 +227,7 @@ export function makeRainOffer(s: State, job: Job, nowMs: number): void {
   }
   const autoAt = Math.max(nowMs + HOUR, Math.min(nowMs + RAIN_AUTO_H * HOUR, job.startMs - 14 * HOUR));
   job.rainOffer = { createdAt: nowMs, autoAt, options };
+  job.rainAffected = true;
   sendForJob(s, job, "rain_offer", nowMs, { options, autoAt });
 }
 
@@ -270,6 +276,30 @@ export function claimOffer(state: State, waitlistId: string, nowMs: number): { s
   e.status = "booked";
   pushEvent(s, nowMs, "backfilled", job.id, `Waitlist: ${entry.name} took the freed ${fmtDay(job.startMs)} ${fmtTime(job.startMs)} slot`);
   return { state: s, job };
+}
+
+/** One tap from Dario: send a drafted (or edited) reply, and clear the item from "Needs you". */
+export function sendOwnerReply(
+  state: State,
+  target: { jobId: string } | { inquiryId: string },
+  body: string,
+  nowMs: number,
+): State {
+  const s = clone(state);
+  if ("jobId" in target) {
+    const job = findJob(s, target.jobId);
+    job.ownerFlag = null;
+    pushMessage(s, { key: `owner:${job.id}:${nowMs}`, jobId: job.id, at: nowMs, kind: "owner_reply", channel: "sms", direction: "out", to: job.customer.phone, body });
+    pushEvent(s, nowMs, "owner_reply", job.id, `Dario replied to ${job.customer.name}`);
+  } else {
+    const q = s.inquiries.find((i) => i.id === target.inquiryId);
+    if (!q) throw new BookingError("not_found", "We couldn't find that message.");
+    q.status = "answered";
+    q.note = null;
+    pushMessage(s, { key: `owner:${q.id}:${nowMs}`, at: nowMs, kind: "owner_reply", channel: "sms", direction: "out", to: q.from, body });
+    pushEvent(s, nowMs, "owner_reply", null, `Dario replied to ${q.from}`);
+  }
+  return s;
 }
 
 export const zoneOf = (zip: string): ZoneKey | null => zoneForZip(zip);

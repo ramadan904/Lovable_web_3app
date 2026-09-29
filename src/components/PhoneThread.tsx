@@ -6,7 +6,7 @@ import { fmtStamp } from "@/lib/time";
 const LABEL: Record<Message["kind"], string> = {
   confirmation: "Booking confirmation", prep: "Prep note", reminder: "Reminder", confirm_reply: "Customer reply", nudge: "Second nudge",
   released: "Slot released", rain_offer: "Rain offer", rain_moved: "Moved for rain", moved: "Moved by customer", cancelled: "Cancellation",
-  waitlist_offer: "Waitlist offer", omw: "On the way", aftercare: "Aftercare", inquiry_reply: "Instant reply", inquiry_in: "Customer message",
+  waitlist_offer: "Waitlist offer", omw: "On the way", aftercare: "Aftercare", inquiry_reply: "Instant reply", inquiry_in: "Customer message", owner_reply: "Reply from Dario",
 };
 export const kindLabel = (k: Message["kind"]) => LABEL[k];
 

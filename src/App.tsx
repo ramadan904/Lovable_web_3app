@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect } from "react";
 import { BrowserRouter, HashRouter, MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { Layout } from "@/components/Layout";
+import { PageLoading } from "@/components/PageLoading";
 import { Toaster } from "@/components/ui/sonner";
 import Index from "./pages/Index";
 
@@ -28,7 +29,7 @@ const App = () => (
   <Router>
     <Toaster />
     <ScrollToTop />
-    <Suspense fallback={<div className="min-h-[60vh]" aria-busy="true" aria-label="Loading" />}>
+    <Suspense fallback={<PageLoading />}>
       <Routes>
         <Route element={<Layout />}>
           <Route path="/" element={<Index />} />

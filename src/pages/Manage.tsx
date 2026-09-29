@@ -1,21 +1,23 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import { CalendarPlus, Check, CheckCircle2, CloudRain, MapPin, MessageSquare, Umbrella } from "lucide-react";
+import { CalendarPlus, Check, CheckCircle2, CloudRain, Copy, MapPin, MessageSquare, Umbrella } from "lucide-react";
 import { toast } from "sonner";
 import { PhoneThread } from "@/components/PhoneThread";
 import { SlotPicker } from "@/components/SlotPicker";
 import { Tracker } from "@/components/Tracker";
+import { WeatherStatus } from "@/components/WeatherStatus";
 import { Button } from "@/components/ui/button";
 import { Input, Textarea } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useNow } from "@/hooks/useNow";
 import { timelineFor } from "@/lib/automations";
-import { ADDONS, BUSINESS, FREE_CHANGE_H, PARKING, SERVICES, ZONES, dollars, hoursLabel, isCovered } from "@/lib/business";
+import { ADDONS, BUSINESS, FREE_CHANGE_H, PARKING, RAIN_CHECK_H, SERVICES, ZONES, dollars, hoursLabel, isCovered } from "@/lib/business";
 import { CAN_DOWNLOAD, downloadIcs } from "@/lib/ics";
+import { dryOptions } from "@/lib/engine";
 import { ACTIVE, BookingError } from "@/lib/model";
 import { getJob } from "@/lib/ops";
 import { actions, useStore } from "@/lib/store";
-import { HOUR, localDate, fmtDayLong, fmtRelative, fmtStamp, fmtTime } from "@/lib/time";
+import { HOUR, MIN, localDate, fmtDay, fmtDayLong, fmtRelative, fmtStamp, fmtTime } from "@/lib/time";
 import { cn } from "@/lib/utils";
 
 const STATUS: Record<string, { label: string; tone: string }> = {
@@ -37,6 +39,15 @@ export default function Manage() {
   const [moving, setMoving] = useState(false);
   const [target, setTarget] = useState<number | null>(null);
   const [cancelling, setCancelling] = useState(false);
+  const changeRef = useRef<HTMLElement>(null);
+  const nowMinute = Math.floor(now / MIN);
+  const freeNow = !!job && job.startMs - now >= FREE_CHANGE_H * HOUR;
+  // One-tap alternatives: the nearest dry times for an outdoor car, the nearest open times for a covered one.
+  const alternatives = useMemo(
+    () => (job && freeNow && ACTIVE.includes(job.status) ? dryOptions(state, job, now, 3) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [state, job?.id, job?.startMs, freeNow, nowMinute],
+  );
 
   const messages = useMemo(() => state.messages.filter((m) => m.jobId === job?.id).sort((a, b) => a.at - b.at), [state.messages, job?.id]);
 
@@ -56,6 +67,32 @@ export default function Manage() {
   const covered = isCovered(job.parking);
   const reminderSent = messages.some((m) => m.kind === "reminder");
   const st = STATUS[job.status];
+  const refundable = free || job.rainAffected;
+  const end = job.startMs + job.durationMin * MIN;
+  const tl = timelineFor(state, job, now);
+  const at = (k: string) => tl.find((t) => t.kind === k);
+  // Always three steps, in order. If a step's time has already passed at booking, say where it went instead of dropping it.
+  const nextSteps = [
+    at("prep")
+      ? { title: "Prep note", text: `${fmtStamp(at("prep")!.at)}: what to clear out, and any gate code changes`, done: at("prep")!.state === "sent" }
+      : { title: "Prep note", text: "is in your confirmation (you booked inside 48 hours): clear out personal items and trash", done: true },
+    at("reminder")
+      ? { title: "One-tap confirm", text: `${fmtStamp(at("reminder")!.at)}: tap Confirm and you're set`, done: at("reminder")!.state === "sent" }
+      : { title: "One-tap confirm", text: "isn't needed: you booked inside 24 hours, so you're already confirmed", done: true },
+    { title: "On-the-way text", text: `${fmtStamp(job.startMs - 30 * MIN)}: with a live map of Bertha`, done: at("omw")?.state === "sent" },
+    { title: "Rain watch", text: covered ? "Your car is covered, so weather never moves you." : `${RAIN_CHECK_H} hours before, if heavy rain is forecast, you're offered dry times and moved free.`, done: false },
+  ];
+  const openChange = (mode: "move" | "cancel") => {
+    if (mode === "move" && free) { setMoving(true); setCancelling(false); }
+    if (mode === "cancel" && refundable) { setCancelling(true); setMoving(false); }
+    window.setTimeout(() => changeRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
+  };
+  const copyCode = () => {
+    navigator.clipboard?.writeText(job.code).then(
+      () => toast.success("Booking code copied"),
+      () => toast(`Your booking code is ${job.code}`),
+    );
+  };
   const guard = (fn: () => void, ok: string) => {
     try { fn(); toast.success(ok); } catch (e) { if (e instanceof BookingError) toast.error(e.message); else throw e; }
   };
@@ -64,13 +101,41 @@ export default function Manage() {
     <div className="container max-w-4xl py-8 md:py-12">
       {isNew && active && (
         <div className="mb-8 overflow-hidden rounded-lg bg-primary text-primary-foreground shadow-lift animate-rise-in">
-          <div className="flex flex-col gap-4 p-6 md:flex-row md:items-center md:justify-between md:p-8">
-            <div>
-              <p className="flex items-center gap-2 text-sm font-semibold text-sun"><CheckCircle2 className="size-5" aria-hidden="true" /> You're booked</p>
-              <h1 className="mt-1 text-3xl font-extrabold md:text-4xl">{fmtDayLong(job.startMs)} at {fmtTime(job.startMs)}</h1>
-              <p className="mt-2 max-w-xl text-primary-foreground/85">{BUSINESS.ownerFirst} and {BUSINESS.van} will be at {job.address}. Nothing else to do: we'll text you a prep note, then a one-tap confirm the day before.</p>
+          <div className="space-y-6 p-6 md:p-8">
+            <div className="flex flex-wrap items-start justify-between gap-5">
+              <div className="min-w-0">
+                <p className="flex items-center gap-2 text-sm font-semibold text-sun"><CheckCircle2 className="size-5" aria-hidden="true" /> You're booked</p>
+                <h1 className="mt-1 text-3xl font-extrabold md:text-4xl">{fmtDayLong(job.startMs)} at {fmtTime(job.startMs)}</h1>
+                <p className="mt-2 max-w-xl text-primary-foreground/85">
+                  {BUSINESS.ownerFirst} and {BUSINESS.van} will be at {job.address}, arriving around {fmtTime(job.startMs)} and finished by about {fmtTime(end)}. Nothing else to do.
+                </p>
+              </div>
+              <div className="rounded-md border border-primary-foreground/25 bg-primary-foreground/10 px-5 py-3 text-center">
+                <p className="text-xs font-semibold uppercase tracking-wider text-primary-foreground/75">Booking code</p>
+                <p className="font-display text-3xl font-extrabold tracking-wider">{job.code}</p>
+                <button type="button" onClick={copyCode} className="mt-1 inline-flex items-center gap-1.5 text-sm font-semibold text-sun underline underline-offset-4">
+                  <Copy className="size-3.5" aria-hidden="true" /> Copy code
+                </button>
+              </div>
             </div>
-            {CAN_DOWNLOAD && <Button variant="sun" size="lg" onClick={() => downloadIcs(job)}><CalendarPlus /> Add to calendar</Button>}
+
+            <div className="flex flex-wrap gap-2">
+              {CAN_DOWNLOAD && <Button variant="sun" onClick={() => downloadIcs(job)}><CalendarPlus /> Add to calendar</Button>}
+              <Button variant="outline" className="border-primary-foreground/40 bg-transparent text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground" onClick={() => openChange("move")}>Reschedule</Button>
+              <Button variant="outline" className="border-primary-foreground/40 bg-transparent text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground" onClick={() => openChange("cancel")}>Cancel</Button>
+            </div>
+
+            <section aria-label="What happens next" className="rounded-md bg-primary-foreground/10 p-4">
+              <h2 className="mb-3 font-display text-lg font-bold">What happens next</h2>
+              <ol className="space-y-2.5 text-sm">
+                {nextSteps.map((n) => (
+                  <li key={n.title} className="flex gap-3">
+                    <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-sun text-[0.65rem] font-bold text-sun-ink" aria-hidden="true">{n.done ? "✓" : "•"}</span>
+                    <span><strong>{n.title}</strong> <span className="text-primary-foreground/80">{n.text}</span></span>
+                  </li>
+                ))}
+              </ol>
+            </section>
           </div>
         </div>
       )}
@@ -106,6 +171,15 @@ export default function Manage() {
         </section>
       )}
 
+      {active && !job.rainOffer && (
+        <WeatherStatus
+          className="mb-6"
+          parking={job.parking} startMs={job.startMs} durationMin={job.durationMin} zone={job.zone} excludeJobId={job.id}
+          onPick={free ? (ms) => guard(() => actions.move(job.id, ms), "Moved to a dry day") : undefined}
+          pickLabel="Move to"
+        />
+      )}
+
       <div className="grid gap-6 md:grid-cols-[1fr_20rem]">
         <div className="space-y-6">
           <section className="card p-5 md:p-6" aria-labelledby="details-h">
@@ -126,17 +200,31 @@ export default function Manage() {
           {active && <AccessCard key={job.id} id={job.id} gate={job.access.gateCode} notes={job.access.notes} />}
 
           {active && (
-            <section className="card p-5 md:p-6" aria-labelledby="change-h">
-              <h2 id="change-h" className="text-xl font-bold">Need to change something?</h2>
+            <section ref={changeRef} id="change" tabIndex={-1} className="card p-5 focus:outline-none md:p-6" aria-labelledby="change-h">
+              <h2 id="change-h" className="text-xl font-bold">Reschedule or cancel</h2>
               {free ? (
                 <p className="mt-1 text-sm text-muted-foreground">Free until {fmtStamp(job.startMs - FREE_CHANGE_H * HOUR)}. No calls, no forms: your reminders move with you.</p>
+              ) : job.rainAffected ? (
+                <p className="mt-1 text-sm text-muted-foreground">Rain has changed this booking, so you can cancel at any time for a full refund of your {dollars(job.depositCents)}. To pick a different time, use the dry options above or call {BUSINESS.phone}.</p>
               ) : (
                 <p className="mt-1 text-sm text-muted-foreground">Changes are free up to {FREE_CHANGE_H} hours ahead. {BUSINESS.ownerFirst} is already planning your day, so for anything now please call {BUSINESS.phone}. Cancelling now keeps the deposit.</p>
               )}
-              {free && !moving && !cancelling && (
+
+              {free && !moving && !cancelling && alternatives.length > 0 && (
+                <div className="mt-4">
+                  <p className="text-sm font-semibold">{covered ? "Nearest open times, one tap:" : "Nearest dry times, one tap:"}</p>
+                  <ul className="mt-2 flex flex-wrap gap-2" aria-label="One-tap alternatives">
+                    {alternatives.map((ms) => (
+                      <li key={ms}><Button size="sm" variant="soft" onClick={() => guard(() => actions.move(job.id, ms), "Moved. Your reminders moved too.")}>{fmtDay(ms)} · {fmtTime(ms)}</Button></li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {!moving && !cancelling && (free || job.rainAffected) && (
                 <div className="mt-4 flex flex-wrap gap-2">
-                  <Button variant="outline" onClick={() => setMoving(true)}>Move to another time</Button>
-                  <Button variant="danger" onClick={() => setCancelling(true)}>Cancel</Button>
+                  {free && <Button variant="outline" onClick={() => setMoving(true)}>Pick another time</Button>}
+                  <Button variant="danger" onClick={() => setCancelling(true)}>{free ? "Cancel" : "Cancel for a full refund"}</Button>
                 </div>
               )}
               {moving && (
@@ -152,7 +240,7 @@ export default function Manage() {
               )}
               {cancelling && (
                 <div className="mt-5 space-y-3 rounded-md border border-danger/30 bg-danger-soft p-4">
-                  <p className="font-semibold text-danger">Cancel this booking? Your {dollars(job.depositCents)} deposit is refunded.</p>
+                  <p className="font-semibold text-danger">Cancel this booking? Your {dollars(job.depositCents)} deposit is refunded{job.rainAffected && !free ? " in full, because rain changed your booking" : ""}.</p>
                   <div className="flex gap-2">
                     <Button variant="danger" onClick={() => guard(() => { actions.cancel(job.id); setCancelling(false); }, "Cancelled. Deposit refunded.")}>Yes, cancel</Button>
                     <Button variant="ghost" onClick={() => setCancelling(false)}>Keep it</Button>

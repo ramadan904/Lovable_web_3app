@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { WeatherChip } from "../Weather";
 import { Tracker } from "../Tracker";
 import { JobCard } from "./JobCard";
+import { RunStrip } from "./RunStrip";
 
 const clock = (date: string, min: number) => fmtTime(atLocal(date, min));
 
@@ -26,6 +27,8 @@ export function DaySheet({ state, date, now }: { state: State; date: string; now
         <WeatherChip f={f} />
         <span className="text-sm text-muted-foreground">{jobs.length} {jobs.length === 1 ? "job" : "jobs"} · ${Math.round(revenue / 100).toLocaleString()}</span>
       </div>
+
+      {jobs.length > 0 && <RunStrip jobs={jobs} date={date} title={date === localDate(now) ? "Today's run" : `Run for ${fmtDate(date, "EEEE")}`} />}
 
       {jobs.length > 0 && <Tracker state={state} date={date} now={now} />}
 

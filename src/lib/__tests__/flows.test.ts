@@ -264,3 +264,83 @@ describe("neighbour deals (route-density pricing)", () => {
     expect(job.totalCents).toBe(8500);
   });
 });
+
+describe("the rain promise: '$25 holds the slot. Fully refundable if we have to move you for rain.'", () => {
+  const outdoor = () => createJob(emptyState(NOW), input({ parking: "driveway", startMs: atLocal(day(3), 10 * 60) }), NOW);
+
+  it("refunds a late cancellation once rain has touched the booking, but not otherwise", () => {
+    const { state, job } = outdoor();
+    const late = job.startMs - 5 * HOUR;
+    // Without rain, cancelling inside 24 hours keeps the deposit.
+    expect(cancelJob(state, job.id, late).jobs[0].depositState).toBe("kept");
+    // A rain offer marks the booking; from then on cancelling is a full refund at any time.
+    const stormy = tick({ ...state, stormDays: [localDate(job.startMs)] }, job.startMs - 40 * HOUR);
+    expect(stormy.jobs[0].rainAffected).toBe(true);
+    const cancelled = cancelJob(stormy, job.id, late);
+    expect(cancelled.jobs[0].depositState).toBe("refunded");
+    expect(cancelled.jobs[0].closedReason).toMatch(/rain/i);
+    expect(cancelled.messages.find((m) => m.kind === "cancelled")?.body).toMatch(/in full/);
+  });
+
+  it("also marks a booking that was moved for rain", () => {
+    const { state, job } = outdoor();
+    const storm = { ...state, stormDays: [localDate(job.startMs)] };
+    const s = advance(storm, job.startMs - 47 * HOUR, job.startMs - 30 * HOUR);
+    expect(s.jobs[0].startMs).not.toBe(job.startMs);
+    expect(s.jobs[0].rainAffected).toBe(true);
+  });
+
+  it("offers dry alternatives for a booking that doesn't exist yet", async () => {
+    const { dryOptions } = await import("../engine");
+    const s = { ...emptyState(NOW), stormDays: [day(3)] };
+    const opts = dryOptions(s, { startMs: atLocal(day(3), 10 * 60), durationMin: 120, zone: "NE", parking: "driveway" }, NOW, 3);
+    expect(opts.length).toBeGreaterThan(0);
+    expect(opts.every((ms) => localDate(ms) !== day(3))).toBe(true);
+  });
+});
+
+describe("one-tap drafted replies", () => {
+  it("drafts a reply for a rain booking with no dry slot, and sending it clears the flag and messages the customer", async () => {
+    const { draftForFlag } = await import("../drafts");
+    const { sendOwnerReply } = await import("../ops");
+    let { state, job } = createJob(emptyState(NOW), input({ parking: "driveway" }), NOW);
+    state = { ...state, jobs: state.jobs.map((j) => ({ ...j, ownerFlag: "Rain is forecast and no dry slot is open." })) };
+    job = state.jobs[0];
+    const draft = draftForFlag(job);
+    expect(draft).toMatch(/refunded in full/);
+    expect(draft).toContain(job.code);
+    const sent = sendOwnerReply(state, { jobId: job.id }, draft, NOW);
+    expect(sent.jobs[0].ownerFlag).toBeNull();
+    const m = sent.messages.find((x) => x.kind === "owner_reply")!;
+    expect(m).toMatchObject({ direction: "out", to: job.customer.phone, body: draft });
+    expect(sent.events.map((e) => e.kind)).toContain("owner_reply");
+  });
+
+  it("drafts a useful answer to an off-menu request, with a real link", async () => {
+    const { draftForInquiry } = await import("../drafts");
+    const { answerInquiry } = await import("../inquiry");
+    const { sendOwnerReply } = await import("../ops");
+    const { state, inquiry } = answerInquiry(emptyState(NOW), "(503) 555-0279", "Do you do ceramic coating? Just bought a Tesla, Pearl district", NOW);
+    expect(inquiry.status).toBe("needs_owner");
+    const draft = draftForInquiry(inquiry);
+    expect(draft).toMatch(/ceramic coating/);
+    expect(draft).toMatch(/fernhill\.app\/book\?/);
+    const sent = sendOwnerReply(state, { inquiryId: inquiry.id }, draft, NOW);
+    expect(sent.inquiries[0].status).toBe("answered");
+    expect(sent.messages.some((m) => m.kind === "owner_reply" && m.to === "(503) 555-0279")).toBe(true);
+  });
+});
+
+describe("the ledger's headline numbers", () => {
+  it("counts recovered no-shows in dollars and money booked ahead", async () => {
+    const { ledgerFor } = await import("../ledger");
+    const { seedState } = await import("../seed");
+    const now = atLocal("2026-09-30", 13 * 60);
+    const l = ledgerFor(seedState(now), now);
+    expect(l.recoveredCents).toBeGreaterThan(0);
+    expect(l.aheadJobs).toBeGreaterThan(0);
+    expect(l.aheadCents).toBeGreaterThan(0);
+    expect(l.messages).toBeGreaterThan(10);
+    expect(l.minutes).toBeGreaterThan(60);
+  });
+});

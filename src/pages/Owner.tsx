@@ -1,18 +1,20 @@
 import { useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { AlertCircle, CheckCircle2, ChevronDown, Clock, MessageSquareText, Repeat, Route, Timer, Wallet } from "lucide-react";
+import { CheckCircle2, ChevronDown, Clock, MessageSquareText, Repeat, Route, Send, Timer, Wallet } from "lucide-react";
 import { DaySheet } from "@/components/owner/DaySheet";
+import { NeedsYou } from "@/components/owner/NeedsYou";
+import { WaitlistCard } from "@/components/owner/WaitlistCard";
+import { WeatherMoves } from "@/components/owner/WeatherMoves";
 import { Inquiries } from "@/components/owner/Inquiries";
 import { MessagesLog } from "@/components/owner/MessagesLog";
 import { WaitlistPanel } from "@/components/owner/WaitlistPanel";
 import { WeekView } from "@/components/owner/WeekView";
 import { Van } from "@/components/Van";
-import { Button } from "@/components/ui/button";
 import { useNow } from "@/hooks/useNow";
 import { BUSINESS, OPEN_WEEKDAYS } from "@/lib/business";
 import { activeJobs } from "@/lib/engine";
 import { MINUTES_SAVED, ledgerFor } from "@/lib/ledger";
-import { actions, useStore } from "@/lib/store";
+import { useStore } from "@/lib/store";
 import { addDays, fmtDate, fmtTime, localDate, localMinutes, weekdayOf } from "@/lib/time";
 import { cn } from "@/lib/utils";
 
@@ -86,31 +88,13 @@ export default function Owner() {
         <Van className="hidden md:block" raining={state.stormDays.length > 0} />
       </header>
 
-      {needs > 0 && (
-        <section aria-labelledby="needs-h" className="mb-8 rounded-lg border border-sun/60 bg-sun-soft p-5">
-          <h2 id="needs-h" className="flex items-center gap-2 text-lg font-bold text-sun-ink"><AlertCircle className="size-5" aria-hidden="true" /> Needs you</h2>
-          <ul className="mt-3 space-y-3">
-            {flagged.map((j) => (
-              <li key={j.id} className="flex flex-wrap items-center justify-between gap-3 rounded-md bg-card p-3">
-                <p className="max-w-2xl text-sm"><strong>{j.customer.name}:</strong> {j.ownerFlag}</p>
-                <div className="flex gap-2"><Button size="sm" variant="outline" asChild><a href={`tel:${j.customer.phone.replace(/\D/g, "")}`}>Call</a></Button><Button size="sm" variant="soft" onClick={() => actions.dismissFlag(j.id)}>Done</Button></div>
-              </li>
-            ))}
-            {asks.map((q) => (
-              <li key={q.id} className="flex flex-wrap items-center justify-between gap-3 rounded-md bg-card p-3">
-                <p className="max-w-2xl text-sm"><strong>{q.from}:</strong> “{q.text}” <span className="text-muted-foreground">{q.note}</span></p>
-                <div className="flex gap-2"><Button size="sm" variant="outline" onClick={() => setTab("inquiries")}>See reply</Button><Button size="sm" variant="soft" onClick={() => actions.resolveInquiry(q.id)}>Handled</Button></div>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+      <NeedsYou state={state} />
 
       <section aria-labelledby="handled-h" className="mb-10">
         <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
           <div>
             <h2 id="handled-h" className="text-2xl font-extrabold">Handled for you this week</h2>
-            <p className="text-muted-foreground">Work that used to be Dario's evenings.</p>
+            <p className="text-muted-foreground">The last 7 days, counted exactly. Work that used to be Dario's evenings.</p>
           </div>
           <button type="button" className="inline-flex items-center gap-1 text-sm font-semibold text-fern underline underline-offset-4" aria-expanded={how} onClick={() => setHow(!how)}>
             How we count <ChevronDown className={cn("size-4 transition-transform", how && "rotate-180")} aria-hidden="true" />
@@ -118,7 +102,7 @@ export default function Owner() {
         </div>
         {how && (
           <div className="mb-4 rounded-lg border bg-card p-4 text-sm text-muted-foreground">
-            <p className="mb-2 font-semibold text-foreground">Conservative estimates of Dario's time per action:</p>
+            <p className="mb-2 font-semibold text-foreground">Messages, bookings and money are exact counts from the log. Hours saved multiplies them by conservative minutes of Dario's time per action:</p>
             <ul className="grid gap-x-8 gap-y-1 sm:grid-cols-2">
               <li>{MINUTES_SAVED.message} min per message sent for him</li>
               <li>{MINUTES_SAVED.booking} min per booking taken with no call</li>
@@ -126,21 +110,35 @@ export default function Owner() {
               <li>{MINUTES_SAVED.move} min per time change handled</li>
               <li>{MINUTES_SAVED.rain} min per rain reschedule</li>
               <li>{MINUTES_SAVED.backfill} min per gap refilled from the waitlist</li>
+              <li>{MINUTES_SAVED.draft} min per drafted reply he only had to send</li>
             </ul>
           </div>
         )}
-        <dl className="grid grid-cols-2 gap-3 lg:grid-cols-3">
-          <Tile icon={<Timer className="size-5" />} value={hm(ledger.minutes)} label="of admin you didn't do" accent />
-          <Tile icon={<MessageSquareText className="size-5" />} value={String(ledger.messages)} label="texts and emails sent in your name" />
+
+        <dl className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <Headline accent icon={<MessageSquareText className="size-5" />} label="Messages you didn't have to write" value={String(ledger.messages)}
+            sub={`texts and emails sent in your name, plus ${ledger.inquiries} inquiries answered in seconds`} />
+          <Headline icon={<Timer className="size-5" />} label="Hours saved" value={hm(ledger.minutes)} sub="of admin you didn't do (estimate, see how we count)" />
+          <Headline icon={<Repeat className="size-5" />} label="No-shows recovered" value={`${ledger.backfilled} ${ledger.backfilled === 1 ? "slot" : "slots"}`}
+            sub={`$${Math.round(ledger.recoveredCents / 100).toLocaleString()} rescued from the waitlist · ${ledger.released} released, ${ledger.confirmed} confirmed with one tap`} />
+          <Headline icon={<Wallet className="size-5" />} label="Revenue this week" value={`$${Math.round(ledger.revenueCents / 100).toLocaleString()}`}
+            sub={`earned across ${ledger.jobsDone} finished jobs · $${Math.round(ledger.aheadCents / 100).toLocaleString()} booked over the next 7 days (${ledger.aheadJobs} jobs)`} />
+        </dl>
+
+        <dl className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-3">
           <Tile icon={<CheckCircle2 className="size-5" />} value={String(ledger.bookings)} label="bookings taken with no back-and-forth" />
-          <Tile icon={<Repeat className="size-5" />} value={String(ledger.rainMoves + ledger.moves)} label="reschedules handled by customers and rain" />
+          <Tile icon={<Repeat className="size-5" />} value={String(ledger.rainMoves + ledger.moves)} label={`reschedules handled (${ledger.rainMoves} for rain, ${ledger.moves} by customers)`} />
           <Tile icon={<Clock className="size-5" />} value={String(ledger.inquiries)} label="inquiries answered in seconds" />
           <Tile icon={<CheckCircle2 className="size-5" />} value={String(ledger.confirmed)} label="one-tap confirmations collected" />
-          <Tile icon={<Repeat className="size-5" />} value={String(ledger.released + ledger.backfilled)} label={`no-show gaps closed (${ledger.backfilled} refilled from the waitlist)`} />
           <Tile icon={<Route className="size-5" />} value={hm(ledger.driveSavedMin)} label={`less driving from neighbour deals (customers saved $${Math.round(ledger.dealCents / 100)})`} />
-          <Tile icon={<Wallet className="size-5" />} value={`$${Math.round(ledger.revenueCents / 100).toLocaleString()}`} label={`earned across ${ledger.jobsDone} finished jobs`} />
+          <Tile icon={<Send className="size-5" />} value={String(ledger.ownerReplies)} label="drafted replies you sent with one tap" />
         </dl>
       </section>
+
+      <div className="mb-10 grid gap-6 lg:grid-cols-2">
+        <WeatherMoves state={state} now={now} />
+        <WaitlistCard state={state} now={now} />
+      </div>
 
       <div role="tablist" aria-label="Owner sections" className="mb-6 flex gap-1 overflow-x-auto border-b">
         {TABS.map((t, i) => (
@@ -197,6 +195,17 @@ function Tile({ icon, value, label, accent = false }: { icon: React.ReactNode; v
       <div className={cn("mb-2", accent ? "text-sun" : "text-fern")} aria-hidden="true">{icon}</div>
       <dt className={cn("order-2 mt-1.5 text-sm", accent ? "text-primary-foreground/85" : "text-muted-foreground")}>{label}</dt>
       <dd className="order-1 font-display text-3xl font-extrabold leading-none">{value}</dd>
+    </div>
+  );
+}
+
+function Headline({ icon, value, label, sub, accent = false }: { icon: React.ReactNode; value: string; label: string; sub: string; accent?: boolean }) {
+  return (
+    <div className={cn("card flex flex-col p-5", accent && "border-primary bg-primary text-primary-foreground")}>
+      <div className={cn("mb-2", accent ? "text-sun" : "text-fern")} aria-hidden="true">{icon}</div>
+      <dt className={cn("order-1 text-sm font-semibold", accent ? "text-primary-foreground" : "text-foreground")}>{label}</dt>
+      <dd className="order-2 mt-1 font-display text-4xl font-extrabold leading-none">{value}</dd>
+      <dd className={cn("order-3 mt-2 text-sm", accent ? "text-primary-foreground/85" : "text-muted-foreground")}>{sub}</dd>
     </div>
   );
 }

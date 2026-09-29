@@ -1,3 +1,5 @@
+import { ListChecks } from "lucide-react";
+import { EmptyState } from "@/components/EmptyState";
 import { SERVICES, ZONES } from "@/lib/business";
 import type { State } from "@/lib/model";
 import { fmtDay, fmtRelative, fmtStamp, fmtTime } from "@/lib/time";
@@ -27,7 +29,11 @@ export function WaitlistPanel({ state, now }: { state: State; now: number }) {
           </li>
         ))}
       </ul>
-      {!list.length && <p className="text-muted-foreground">Nobody is waiting.</p>}
+      {!list.length && (
+        <EmptyState icon={ListChecks} title="Nobody's waiting">
+          When a day fills up, customers can join the waitlist from the booking page, and they'll be listed here first come first served.
+        </EmptyState>
+      )}
     </section>
   );
 }

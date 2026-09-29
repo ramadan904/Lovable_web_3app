@@ -110,7 +110,9 @@ export const isRainRisk = (state: State, startMs: number, parking: Parking) =>
   !isCovered(parking) && forecastFor(localDate(startMs), state.stormDays).rain >= RAIN_LIMIT;
 
 /** The nearest dry options for a job that has to move, nearest day and same time of day first. */
-export function dryOptions(state: State, job: Job, nowMs: number, count = 3): number[] {
+export type Movable = Pick<Job, "startMs" | "durationMin" | "zone" | "parking"> & { id?: string };
+
+export function dryOptions(state: State, job: Movable, nowMs: number, count = 3): number[] {
   const today = localDate(nowMs);
   const origDate = localDate(job.startMs);
   const origMin = localMinutes(job.startMs);

@@ -41,6 +41,8 @@ export interface Job {
   closedReason: string | null;
   rainOffer: RainOffer | null;
   ownerFlag: string | null;
+  /** True once rain has touched this booking (offered or moved): it can then be cancelled for a full refund. */
+  rainAffected: boolean;
   source: "web" | "inquiry" | "waitlist";
   /** Demo only: seeded customers reply "C" on their own. */
   simReplies: boolean;
@@ -49,7 +51,7 @@ export interface Job {
 export type MessageKind =
   | "confirmation" | "prep" | "reminder" | "confirm_reply" | "nudge" | "released"
   | "rain_offer" | "rain_moved" | "moved" | "cancelled" | "waitlist_offer"
-  | "omw" | "aftercare" | "inquiry_reply" | "inquiry_in";
+  | "omw" | "aftercare" | "inquiry_reply" | "inquiry_in" | "owner_reply";
 
 export interface Message {
   id: string;
@@ -66,7 +68,7 @@ export interface Message {
 
 export type EventKind =
   | "booked" | "confirmed" | "moved" | "rain_moved" | "cancelled" | "released"
-  | "backfilled" | "completed" | "inquiry" | "waitlist_joined";
+  | "backfilled" | "completed" | "inquiry" | "waitlist_joined" | "owner_reply";
 
 export interface ActivityEvent {
   id: string;
