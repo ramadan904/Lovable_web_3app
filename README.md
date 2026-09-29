@@ -71,6 +71,14 @@ There is no backend to configure. The app runs on a seeded in-browser store, gen
 4. Open **Demo controls**, then **Storm hits...**. Open the **Messages sent** tab, filter to **Rain**, and open a customer's booking link to choose a dry day.
 5. Press **+6 hours** a few times, or **Next job morning**, and watch unconfirmed bookings get nudged, released and offered to the waitlist.
 
+## Deploy
+
+The app is static, so any static host works.
+
+- **GitHub Pages (included).** `.github/workflows/pages.yml` builds with `npm run build:pages` (relative paths, hash routing, so deep links and reloads work under `https://<owner>.github.io/<repo>/`) and publishes on every push to `main` or the working branch. One-time setup: **Settings → Pages → Build and deployment → Source: GitHub Actions**. Pages on a private repository needs a paid GitHub plan, and the `github-pages` environment may only allow deployments from the default branch (Settings → Environments).
+- **Anywhere else.** `npm run build` (normal paths, needs a "serve index.html for every route" rule) or `npm run build:pages` (works from any folder).
+- **Single-file page.** `npm run build:artifact` bundles everything into one HTML file, used for the hosted preview.
+
 ## Architecture
 
 ```

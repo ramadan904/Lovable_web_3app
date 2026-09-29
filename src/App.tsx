@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect } from "react";
-import { BrowserRouter, MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
+import { BrowserRouter, HashRouter, MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { Layout } from "@/components/Layout";
 import { Toaster } from "@/components/ui/sonner";
 import Index from "./pages/Index";
@@ -16,8 +16,9 @@ function ScrollToTop() {
   return null;
 }
 
-// The single-file "artifact" build is hosted at a URL it doesn't control, so it routes in memory.
-const Router = import.meta.env.VITE_ROUTER === "memory" ? MemoryRouter : BrowserRouter;
+// Hosted builds can't rely on server-side URL rewriting: the single-file "artifact" build routes in
+// memory, and the GitHub Pages build routes on the URL hash. The normal build uses real paths.
+const Router = import.meta.env.VITE_ROUTER === "memory" ? MemoryRouter : import.meta.env.VITE_ROUTER === "hash" ? HashRouter : BrowserRouter;
 
 const App = () => (
   <Router>
