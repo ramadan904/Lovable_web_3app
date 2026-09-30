@@ -10,13 +10,13 @@ const dayButtons = (page: Page) => page.locator("fieldset button[aria-pressed]:n
 
 async function bookThroughUi(page: Page, name = "Test Driver", dayIndex = 0) {
   await page.goto("/book");
-  await page.getByRole("radio", { name: /SUV or wagon/ }).check({ force: true });
-  await page.getByRole("radio", { name: /Full Refresh/ }).check({ force: true });
+  await page.getByRole("radio", { name: /SUV or wagon/ }).locator("xpath=ancestor::label").click();
+  await page.getByRole("radio", { name: /Full Refresh/ }).locator("xpath=ancestor::label").click();
   await page.getByRole("button", { name: /Continue/ }).click();
 
   await page.getByLabel("Zip code").fill("97212");
   await page.getByLabel("Street address").fill("3999 NE Test St");
-  await page.getByRole("radio", { name: /^Garage/ }).check({ force: true });
+  await page.getByRole("radio", { name: /^Garage/ }).locator("xpath=ancestor::label").click();
   await page.getByRole("button", { name: /Continue/ }).click();
 
   // Real availability: pick the first open time on the chosen day.
@@ -37,6 +37,9 @@ async function bookThroughUi(page: Page, name = "Test Driver", dayIndex = 0) {
 async function demo(page: Page, name: RegExp) {
   const open = page.getByRole("button", { name: "Open demo controls" });
   const target = page.getByRole("button", { name });
+  // The controls are backstage on every page: Alt+D brings them up.
+  await page.getByRole("banner").waitFor(); // the app has drawn (and is not mid-reload)
+  if (!(await open.isVisible()) && !(await target.isVisible())) await page.keyboard.press("Alt+D");
   await open.or(target).first().waitFor();
   if (await open.isVisible()) await open.click();
   await target.click();
@@ -177,7 +180,7 @@ test.describe("Where's Bertha?", () => {
 });
 
 test("every fast-forward click moves the demo clock on screen straight away", async ({ page }) => {
-  await page.goto("/owner");
+  await page.goto("/owner?demo=1");
   const read = async () => {
     const open = page.getByRole("button", { name: "Open demo controls" });
     const panel = page.getByRole("region", { name: "Demo controls" });
@@ -266,10 +269,11 @@ test.describe("Booking review and the rain promise", () => {
     await toReview(page);
     const review = page.getByRole("region", { name: "Review your booking" });
     await expect(review).toBeVisible();
-    for (const label of ["Service", "Vehicle", "Where", "Parking", "Time window", "Price"]) await expect(review.getByText(label, { exact: true })).toBeVisible();
+    for (const label of ["Service", "Vehicle", "Where", "Parking", "Time window"]) await expect(review.getByText(label, { exact: true })).toBeVisible();
+    await expect(review.getByRole("group", { name: "Price breakdown" })).toBeVisible();
     await expect(review.getByText(/covered, not weather-sensitive/)).toBeVisible();
     await expect(review.getByText(/to about \d{1,2}:\d{2} [AP]M/)).toBeVisible();
-    await expect(page.getByText("$25 holds the slot. Fully refundable if we have to move you for rain.")).toBeVisible();
+    await expect(page.getByText("$25 deposit holds the slot. Fully refundable if we have to move you for rain.")).toBeVisible();
     await expect(page.getByRole("region", { name: "Weather status" })).toContainText("Not weather-sensitive");
   });
 
@@ -277,6 +281,8 @@ test.describe("Booking review and the rain promise", () => {
     await page.goto("/book?v=sedan&s=express&zip=97212&p=driveway");
     await page.getByLabel("Street address").fill("1 Rain St");
     await page.getByRole("button", { name: /Continue/ }).click();
+    // Wet days are blocked for an outdoor car by default; this customer chooses to see them anyway.
+    await page.getByRole("checkbox", { name: /Dry days only/ }).uncheck();
     // Find a day forecast wet (the tile is announced "Rain likely") that still has times.
     const wetDay = page.locator("fieldset button[aria-pressed]:not([disabled])").filter({ hasText: /Rain likely/ });
     test.skip((await wetDay.count()) === 0, "no rainy day with open times in this three-week window");
@@ -304,7 +310,7 @@ test.describe("Confirmation and the customer portal", () => {
     const next = page.getByRole("region", { name: "What happens next" });
     await expect(next).toContainText("Prep note");
     await expect(next).toContainText(/48 hours|Prep note (Sun|Mon|Tue|Wed|Thu|Fri|Sat)/);
-    await expect(next).toContainText("One-tap confirm");
+    await expect(next).toContainText("Confirmation reminder");
     await expect(next).toContainText("On-the-way text");
     await expect(next).toContainText("Rain watch");
     await expect(page.getByRole("region", { name: "Weather status" })).toContainText("Not weather-sensitive");
@@ -385,7 +391,8 @@ test("cancelling after rain has changed the booking is a full refund, even insid
   await page.goto("/book?v=sedan&s=express&zip=97212&p=driveway");
   await page.getByLabel("Street address").fill("1 Refund St");
   await page.getByRole("button", { name: /Continue/ }).click();
-  await dayButtons(page).nth(2).click();
+  // The nearest dry day: wet days are blocked for an outdoor car, and the storm below is forced onto this one.
+  await dayButtons(page).nth(0).click();
   await page.locator("fieldset button[aria-pressed]").filter({ hasText: TIME }).first().click();
   await page.getByRole("button", { name: /Continue/ }).click();
   await page.getByLabel("Your name").fill("Refund Rae");
@@ -472,7 +479,7 @@ test.describe("Care plans", () => {
     await dayButtons(page).nth(1).click();
     await page.locator("fieldset button[aria-pressed]").filter({ hasText: TIME }).first().click();
     await page.getByRole("button", { name: /Continue/ }).click();
-    await page.getByRole("radio", { name: /Every 6 weeks/ }).check({ force: true });
+    await page.getByRole("radio", { name: /Every 6 weeks/ }).locator("xpath=ancestor::label").click();
     const review = page.getByRole("region", { name: "Review your booking" });
     await expect(review.getByText("Care plan", { exact: true })).toBeVisible();
     await expect(review).toContainText(/Every 6 weeks/);
@@ -510,5 +517,883 @@ test.describe("Ceramic sealant needs a dry day to cure", () => {
     await page.getByRole("button", { name: /Continue/ }).click();
     await expect(page.getByText(/needs about four dry hours to cure/)).toHaveCount(0);
     await expect(page.locator("fieldset button[aria-pressed][disabled]").filter({ hasText: /Needs dry/ })).toHaveCount(0);
+  });
+});
+
+
+test.describe("Natural language to a confirmed booking", () => {
+  const ASK = "My dog wrecked my Outback. I'm in Sellwood. Friday morning?";
+
+  test("your example becomes a filled-in booking with real dry times, carried all the way to the confirmation", async ({ page }) => {
+    await page.goto("/");
+    await page.getByLabel(/Ask the way you'd text/).fill(ASK);
+    await page.getByRole("button", { name: "Get real times" }).click();
+
+    // What we understood, in plain words.
+    const understood = page.getByRole("list", { name: "What we understood" }).first();
+    for (const chip of ["SUV or wagon", "Interior Reset", "Pet hair removal", "Sellwood (Southeast)", "Friday morning"]) await expect(understood).toContainText(chip);
+    await expect(page.getByText(/dry-forecast, drive time already counted/)).toBeVisible();
+    await page.getByRole("link", { name: /Continue to booking/ }).click();
+
+    // The form is already filled in: car, service, add-on, and a zip for Sellwood.
+    await expect(page.getByRole("region", { name: "What we read from your message" })).toContainText(ASK);
+    await expect(page.getByRole("heading", { name: "Where do we find you?" })).toBeVisible();
+    await expect(page.getByLabel("Zip code")).toHaveValue("97202");
+    await expect(page.getByText(/We used .*97202.* for Sellwood/)).toBeVisible();
+    await page.getByLabel("Street address").fill("1 Umatilla St");
+    await page.getByRole("radio", { name: /^Driveway/ }).locator("xpath=ancestor::label").click();
+    await page.getByRole("button", { name: /Continue/ }).click();
+
+    // Only dry days are shown, with the slot they were offered already chosen or one tap away.
+    await expect(page.getByRole("checkbox", { name: /Dry days only/ })).toBeChecked();
+    const rainy = page.locator("fieldset button[aria-pressed]:not([disabled])").filter({ hasText: /Rain likely/ });
+    await expect(rainy).toHaveCount(0);
+    // A neighbour-deal time also carries its discount ("2:00 PM −$10"), so match on the start of the label.
+    const time = page.locator("fieldset button[aria-pressed]").filter({ hasText: /^\d{1,2}:\d{2} [AP]M/ }).first();
+    await time.click();
+    await page.getByRole("button", { name: /Continue/ }).click();
+
+    // Review & pay: a clear breakdown, the deposit broken out, the exact promise.
+    await expect(page.getByRole("heading", { name: "Review and pay the deposit" })).toBeVisible();
+    const review = page.getByRole("region", { name: "Review your booking" });
+    await expect(review).toContainText("Interior Reset");
+    await expect(review).toContainText(/Pet hair removal/);
+    await expect(review).toContainText(/Driveway · outdoors, weather-sensitive/);
+    await expect(review).toContainText(/to about \d{1,2}:\d{2} [AP]M/);
+    const price = review.getByRole("group", { name: "Price breakdown" });
+    await expect(price.getByText("Total", { exact: true })).toBeVisible();
+    await expect(price).toContainText("Due now");
+    await expect(price).toContainText("$25");
+    await expect(price).toContainText("Due on the day");
+    await expect(page.getByText("$25 deposit holds the slot. Fully refundable if we have to move you for rain.")).toBeVisible();
+    await page.getByLabel("Your name").fill("Nat Lang");
+    await page.getByLabel("Mobile number").fill("(503) 555-0100");
+    await page.getByLabel("Email").fill("nat@example.com");
+    await page.getByRole("button", { name: /Book it/ }).click();
+
+    // Confirmation: reference, what happens next, one-tap actions, and a link to come back to.
+    await expectBooked(page);
+    await expect(page.getByText("Booking code", { exact: true })).toBeVisible();
+    const banner = page.getByRole("region", { name: "Your booking page" });
+    // The link is a real address for wherever the app is hosted, so pasting it into a browser opens the booking.
+    const code = new URL(page.url()).pathname.match(/\/b\/(FH-[A-Z0-9]{4})/)![1];
+    await expect(banner).toContainText(`${new URL(page.url()).origin}/b/${code}`);
+    await expect(banner.getByRole("button", { name: "Copy link" })).toBeVisible();
+    await expect(page.getByRole("link", { name: /Add to calendar|Google Calendar/ }).first()).toHaveAttribute("href", /calendar\.google\.com\/calendar\/render/);
+    await expect(page.getByRole("button", { name: "Reschedule", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Cancel", exact: true }).first()).toBeVisible();
+    await expect(page.getByRole("region", { name: "What happens next" })).toContainText("Confirmation reminder");
+  });
+
+  test("a message we can't read says so instead of guessing, and offers a way forward", async ({ page }) => {
+    await page.goto("/");
+    await page.getByLabel(/Ask the way you'd text/).fill("hi");
+    await page.getByRole("button", { name: "Get real times" }).click();
+    await expect(page.getByText(/couldn't spot a vehicle, a place or a day/)).toBeVisible();
+    await expect(page.getByRole("link", { name: /Continue/ })).toBeVisible();
+  });
+
+  test("urgent requests get the earliest dry times", async ({ page }) => {
+    await page.goto("/");
+    await page.getByLabel(/Ask the way you'd text/).fill("need my truck washed ASAP, muddy, Beaverton");
+    await page.getByRole("button", { name: "Get real times" }).click();
+    await expect(page.getByRole("list", { name: "What we understood" }).first()).toContainText("Urgent: earliest dry slots");
+    await expect(page.getByText(/Earliest dry times/)).toBeVisible();
+  });
+});
+
+test.describe("The guided story", () => {
+  test("plays from the landing page through the storm to the end, and hands the visitor a fresh week", async ({ page }) => {
+    const errors: string[] = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+    await page.goto("/");
+    await page.getByRole("button", { name: "Watch the 90-second story" }).click();
+    const panel = page.getByRole("region", { name: "Guided story" });
+    await expect(panel).toContainText("Meet Dario");
+    await expect(panel).toContainText("1 of 9");
+
+    await panel.getByRole("button", { name: "Next" }).click();
+    await expect(panel).toContainText("A customer texts once");
+    await expect(page).toHaveURL(/\/book\?.*src=ask/);
+    await expect(page.getByRole("region", { name: "What we read from your message" })).toBeVisible();
+
+    await panel.getByRole("button", { name: "Next" }).click();
+    await expect(panel).toContainText("A deposit that feels safe");
+    await panel.getByRole("button", { name: "Next" }).click();
+    await expect(page).toHaveURL(/\/owner/);
+    await expect(page.getByRole("heading", { name: "Handled for you this week" })).toBeVisible();
+
+    // The storm: the whole app turns to its rain colours.
+    await panel.getByRole("button", { name: "Next" }).click();
+    await expect(panel).toContainText(/Heavy rain is forecast for/);
+    await expect(page.locator("html")).toHaveAttribute("data-weather", "rain");
+
+    await panel.getByRole("button", { name: "Next" }).click();
+    await expect(panel).toContainText("Customers move themselves");
+
+    // The customer's live view of the van, then Bertha running late.
+    await panel.getByRole("button", { name: "Next" }).click();
+    await expect(panel).toContainText("Where's Bertha?");
+    await expect(page).toHaveURL(/\/b\/FH-[A-Z0-9]{4}/);
+    await panel.getByRole("button", { name: "Next" }).click();
+    await expect(panel).toContainText("Running 20 minutes behind");
+    await expect(page.getByRole("status", { name: "Running late" })).toBeVisible();
+
+    await panel.getByRole("button", { name: "Next" }).click();
+    await expect(panel).toContainText("Hours of admin, gone");
+    await expect(panel.getByRole("button", { name: "Next" })).toHaveCount(0);
+    await panel.getByRole("button", { name: /Try it yourself/ }).click();
+    await expect(page).toHaveURL(/\/book/);
+    await expect(panel).toHaveCount(0);
+    // A fresh week: the forced storm is gone (the ordinary forecast for today may still be wet).
+    const storms = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)!).stormDays.length as number, STORE_KEY);
+    expect(storms).toBe(0);
+    expect(errors).toEqual([]);
+  });
+
+  test("a shared /?story=1 link starts it, and Escape closes it", async ({ page }) => {
+    await page.goto("/?story=1");
+    const panel = page.getByRole("region", { name: "Guided story" });
+    await expect(panel).toContainText("Meet Dario");
+    await panel.getByRole("button", { name: "Auto-play" }).click();
+    await expect(panel.getByRole("button", { name: "Pause" })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(panel).toHaveCount(0);
+  });
+
+  test("the panel fits a phone, and closing it leaves the owner's demo controls reachable", async ({ page }) => {
+    await page.goto("/");
+    await page.getByRole("button", { name: "Watch the 90-second story" }).click();
+    const panel = page.getByRole("region", { name: "Guided story" });
+    const box = await panel.boundingBox();
+    const vp = page.viewportSize()!;
+    expect(box!.x).toBeGreaterThanOrEqual(0);
+    expect(box!.x + box!.width).toBeLessThanOrEqual(vp.width);
+    await panel.getByRole("button", { name: "Close the story" }).click();
+    await expect(panel).toHaveCount(0);
+    await page.goto("/owner");
+    await expect(page.getByRole("button", { name: "Open demo controls" })).toHaveCount(0); // backstage everywhere
+  });
+});
+
+test.describe("Resilience and the live forecast", () => {
+  /** A forecast reply that says heavy rain every day around now. */
+  const openMeteo = (rain: number) => {
+    const days: string[] = [];
+    for (let i = -2; i < 17; i++) days.push(new Date(Date.now() + i * 86_400_000).toISOString().slice(0, 10));
+    return { daily: { time: days, precipitation_probability_max: days.map(() => rain), temperature_2m_max: days.map(() => 52) } };
+  };
+
+  test("the live forecast can be switched on (real rain chances flow through) and off again", async ({ page }) => {
+    await page.route("**/api.open-meteo.com/**", (route) => route.fulfill({ json: openMeteo(91) }));
+    await page.goto("/?demo=1");
+    const open = page.getByRole("button", { name: "Open demo controls" });
+    if (await open.isVisible()) await open.click();
+    await expect(page.getByText(/Off: a steady demo forecast/)).toBeVisible();
+    await page.getByRole("button", { name: "Use the live Portland forecast" }).click();
+    await expect(page.getByText(/Real rain chances from Open-Meteo for the next \d+ days/)).toBeVisible();
+    await expect(page.locator("html")).toHaveAttribute("data-weather", "rain"); // 91% today: the whole app is in its rain mood
+    await page.getByRole("button", { name: "Using the live Portland forecast" }).click();
+    await expect(page.getByText(/Off: a steady demo forecast/)).toBeVisible();
+  });
+
+  test("if the forecast service is unreachable, the demo carries on and says why", async ({ page }) => {
+    await page.route("**/api.open-meteo.com/**", (route) => route.abort());
+    await page.goto("/?demo=1");
+    const open = page.getByRole("button", { name: "Open demo controls" });
+    if (await open.isVisible()) await open.click();
+    await page.getByRole("button", { name: "Use the live Portland forecast" }).click();
+    await expect(page.getByText(/Couldn't reach the forecast service/)).toBeVisible();
+    await page.goto("/book");
+    await expect(page.getByRole("heading", { name: "Real times. Rain handled. No texting back and forth." })).toBeVisible();
+  });
+
+  test("damaged saved data is dropped quietly, and a real crash shows a way back rather than a blank page", async ({ page }) => {
+    // Saved data that isn't the right shape: reseeded without a fuss.
+    await page.evaluate((key) => localStorage.setItem(key, JSON.stringify({ v: 1, seededAt: Date.now(), clockOffsetMs: 0, jobs: "oops" })), STORE_KEY);
+    await page.goto("/owner");
+    await expect(page.getByRole("heading", { name: "Handled for you this week" })).toBeVisible();
+
+    // Data that looks right but is missing a customer: the page can't draw it, so the boundary catches it.
+    await page.evaluate((key) => {
+      const s = JSON.parse(localStorage.getItem(key)!);
+      delete s.jobs[0].customer;
+      localStorage.setItem(key, JSON.stringify(s));
+    }, STORE_KEY);
+    page.on("pageerror", () => {});
+    await page.goto("/owner");
+    await expect(page.getByRole("heading", { name: "Bertha hit a pothole" })).toBeVisible();
+    await page.getByRole("button", { name: "Start a fresh week" }).click();
+    await expect(page.getByRole("heading", { name: "Handled for you this week" })).toBeVisible();
+  });
+});
+
+test.describe("The customer's path has no backstage chrome", () => {
+  const demoButton = (page: Page) => page.getByRole("button", { name: "Open demo controls" });
+
+  test("no page shows demo controls by default (landing, booking, confirmation, owner); they come up only on request", async ({ page }) => {
+    for (const path of ["/", "/book"]) {
+      await page.goto(path);
+      await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+      await expect(demoButton(page)).toHaveCount(0);
+    }
+    await bookThroughUi(page, "Path Tester");
+    await expect(demoButton(page)).toHaveCount(0); // not even on the confirmation
+    await page.goto("/owner");
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    await expect(demoButton(page)).toHaveCount(0); // nor on the owner's page
+
+    await page.goto("/");
+    await page.keyboard.press("Alt+D");
+    await expect(demoButton(page)).toBeVisible();
+    await page.keyboard.press("Alt+D");
+    await expect(demoButton(page)).toHaveCount(0);
+    await page.goto("/?demo=1");
+    await expect(demoButton(page)).toBeVisible();
+    await page.goto("/?demo=0");
+    await expect(demoButton(page)).toHaveCount(0);
+  });
+});
+
+test.describe("A booking that works first time, and shows its working", () => {
+  const ASK = "My dog wrecked my Outback. I'm in Sellwood. Friday morning?";
+
+  test("the text box is on screen without scrolling", async ({ page }) => {
+    await page.goto("/");
+    const box = await page.getByLabel(/Ask the way you'd text/).boundingBox();
+    const vp = page.viewportSize()!;
+    expect(box!.y + box!.height).toBeLessThanOrEqual(vp.height);
+  });
+
+  test("the time offered from the text box is still chosen after the address, and the day's working is on show", async ({ page }) => {
+    await page.goto("/");
+    await page.getByLabel(/Ask the way you'd text/).fill(ASK);
+    await page.getByRole("button", { name: "Get real times" }).click();
+    await page.getByRole("link", { name: /Continue to booking/ }).click();
+    await page.getByLabel("Street address").fill("1 Umatilla St");
+    await page.getByRole("radio", { name: /^Driveway/ }).locator("xpath=ancestor::label").click();
+    await page.getByRole("button", { name: /Continue/ }).click();
+
+    // Their time survived choosing where the car is parked: it is highlighted, with its rain chance beside it.
+    const picked = page.locator("fieldset button[aria-pressed=true]").filter({ hasText: /^\d{1,2}:\d{2} [AP]M/ });
+    await expect(picked).toHaveCount(1);
+    await expect(page.getByText(/You picked .* at \d{1,2}:\d{2} [AP]M: \d+% chance of rain/)).toBeVisible();
+
+    // The limits are visible: how many jobs that day, the drive, and what "Full" means.
+    const fit = page.getByRole("figure", { name: "How this day fits together" });
+    await expect(fit).toContainText(/\d of 3 jobs already booked, so yours would be job \d/);
+    await expect(fit).toContainText(/drives \d+ min/);
+    await expect(page.getByText(/means Dario already has 3 jobs that day/)).toBeVisible();
+    const full = page.locator("fieldset button[aria-pressed]:disabled").filter({ hasText: /Full/ }).first();
+    await expect(full).toBeDisabled();
+
+    // Straight on to the review with nothing lost.
+    await page.getByRole("button", { name: /Continue/ }).click();
+    await expect(page.getByRole("heading", { name: "Review and pay the deposit" })).toBeVisible();
+  });
+
+  test("the confirmation reads like a final receipt, and the owner's cards show the deposit", async ({ page }) => {
+    await bookThroughUi(page, "Receipt Reader");
+    const glance = page.getByRole("list", { name: "Your booking at a glance" }).or(page.getByLabel("Your booking at a glance"));
+    await expect(glance).toContainText("3999 NE Test St");
+    await expect(glance).toContainText("Paid");
+    await expect(glance).toContainText(/\$25/);
+    await expect(glance).toContainText(/due after the job/);
+    await expect(glance).toContainText("Covered: rain can't move you");
+    await page.goto("/owner");
+    await expect(page.getByText(/\$25 deposit paid/).first()).toBeVisible();
+  });
+
+  test("the whole path, from the first sentence to a confirmation, is quick and never stalls", async ({ page }) => {
+    const t0 = Date.now();
+    await page.goto("/");
+    await page.getByLabel(/Ask the way you'd text/).fill(ASK);
+    await page.getByRole("button", { name: "Get real times" }).click();
+    await page.getByRole("link", { name: /Continue to booking/ }).click();
+    await page.getByLabel("Street address").fill("1 Umatilla St");
+    await page.getByRole("radio", { name: /^Garage/ }).locator("xpath=ancestor::label").click();
+    await page.getByRole("button", { name: /Continue/ }).click();
+    await page.getByRole("button", { name: /Continue/ }).click(); // their time is already chosen
+    await page.getByLabel("Your name").fill("Quick Quinn");
+    await page.getByLabel("Mobile number").fill("(503) 555-0100");
+    await page.getByLabel("Email").fill("q@example.com");
+    await page.getByRole("button", { name: /Book it/ }).click();
+    await expectBooked(page);
+    expect(Date.now() - t0, "a full booking from the text box should take a few seconds of machine time").toBeLessThan(15_000);
+  });
+});
+
+test("on a short window the reply is scrolled into view, so 'Get real times' visibly does something", async ({ page }) => {
+  await page.setViewportSize({ width: 1000, height: 600 });
+  await page.goto("/");
+  await page.getByLabel(/Ask the way you'd text/).fill("sellwood");
+  await page.getByRole("button", { name: "Get real times" }).click();
+  const reply = page.getByRole("status").filter({ hasText: "Fernhill replied instantly" });
+  await expect(reply).toBeVisible();
+  await expect.poll(async () => reply.evaluate((el) => { const r = el.getBoundingClientRect(); return r.top >= 0 && r.top < window.innerHeight * 0.7; }), { timeout: 5000 }).toBe(true);
+});
+
+test.describe("The constraints hold, and the owner sees the result", () => {
+  test("for a car parked outdoors, wet days are blocked by default and can be shown on request", async ({ page }) => {
+    await page.goto("/book?v=sedan&s=express&zip=97212&p=driveway");
+    await page.getByLabel("Street address").fill("1 Rain Rd");
+    await page.getByRole("button", { name: /Continue/ }).click();
+    const box = page.getByRole("checkbox", { name: /Dry days only/ });
+    await expect(box).toBeChecked();
+    // No day you can pick is a wet one.
+    await expect(page.locator("fieldset button[aria-pressed]:not([disabled])").filter({ hasText: /Rain likely/ })).toHaveCount(0);
+    // A wet day is still on the calendar, greyed out and labelled.
+    await expect(page.locator("fieldset button[aria-pressed]:disabled").filter({ hasText: /^.*Rain/ }).first()).toBeVisible();
+    await box.uncheck();
+    await expect(page.locator("fieldset button[aria-pressed]:not([disabled])").filter({ hasText: /Rain likely/ }).first()).toBeVisible();
+  });
+
+  test("a garage never blocks on rain, so there is no dry-days switch", async ({ page }) => {
+    await page.goto("/book?v=sedan&s=express&zip=97212&p=garage");
+    await page.getByLabel("Street address").fill("1 Dry Rd");
+    await page.getByRole("button", { name: /Continue/ }).click();
+    await expect(page.getByRole("checkbox", { name: /Dry days only/ })).toHaveCount(0);
+  });
+
+  test("a new booking shows on the owner's page with its limits already applied", async ({ page }) => {
+    await bookThroughUi(page, "Owner Olive");
+    await page.goto("/owner");
+    const card = page.getByRole("region", { name: /Just booked/ });
+    await expect(card).toContainText("Owner Olive");
+    await expect(card).toContainText(/Job \d of 3 that day/);
+    await expect(card).toContainText(/min/);
+    await expect(card).toContainText("$25 deposit paid");
+    await expect(card).toContainText("Nothing to do");
+  });
+});
+
+test.describe("A judge's booking: real clicks, nothing hidden, at any window size", () => {
+  const sizes = [
+    { name: "a short preview pane", width: 900, height: 560 },
+    { name: "a small phone", width: 360, height: 640 },
+    { name: "this device", width: 0, height: 0 },
+  ];
+  for (const size of sizes) {
+    test(`car and service, where, when, deposit, confirmation on ${size.name}`, async ({ page }) => {
+      if (size.width) await page.setViewportSize({ width: size.width, height: size.height });
+      const vp = page.viewportSize()!;
+      const errors: string[] = [];
+      page.on("pageerror", (e) => errors.push(e.message));
+      const primary = () => page.getByRole("button", { name: /^(Continue|Book it)/ });
+      /** The next step is always on screen, inside the window, without scrolling. */
+      const nextIsOnScreen = async (label: string) => {
+        const box = await primary().boundingBox();
+        expect(box, `${label}: button exists`).not.toBeNull();
+        expect(box!.y, `${label}: top on screen`).toBeGreaterThanOrEqual(0);
+        expect(box!.y + box!.height, `${label}: bottom on screen`).toBeLessThanOrEqual(vp.height + 1);
+        expect(box!.x, `${label}: left on screen`).toBeGreaterThanOrEqual(0);
+        expect(box!.x + box!.width, `${label}: right on screen`).toBeLessThanOrEqual(vp.width + 1);
+      };
+
+      await page.goto("/book");
+      // Empty tap: the reason is shown, on screen.
+      await primary().click();
+      const alert = page.getByRole("alert");
+      await expect(alert).toContainText("Pick what you drive");
+      const ab = await alert.boundingBox();
+      expect(ab!.y).toBeGreaterThanOrEqual(0);
+      expect(ab!.y + ab!.height).toBeLessThanOrEqual(vp.height + 1);
+
+      // 1. Car and service, by clicking what's drawn (no forced clicks).
+      await page.getByText("SUV or wagon", { exact: true }).click();
+      await page.getByText("Full Refresh", { exact: true }).first().click();
+      await nextIsOnScreen("car and service");
+      await primary().click();
+
+      // 2. Where.
+      await page.getByLabel("Zip code").fill("97212");
+      await page.getByLabel("Street address").fill("3999 NE Test St");
+      await page.getByText("Driveway", { exact: true }).click();
+      await nextIsOnScreen("where");
+      await primary().click();
+
+      // 3. When: rain and drive time on show, wet days blocked, a time chosen.
+      await expect(page.getByRole("heading", { name: "When suits you?" })).toBeVisible();
+      await page.locator("fieldset button[aria-pressed]:not([disabled])").first().click();
+      const time = page.locator("fieldset button[aria-pressed]").filter({ hasText: /^\d{1,2}:\d{2} [AP]M/ }).first();
+      await time.scrollIntoViewIfNeeded();
+      await time.click();
+      await expect(page.getByText(/You picked .* \d+% chance of rain/)).toBeVisible();
+      await expect(page.getByRole("figure", { name: "How this day fits together" })).toContainText(/of 3 jobs already booked/);
+      await nextIsOnScreen("when");
+      await primary().click();
+
+      // 4. Review and pay the deposit.
+      await expect(page.getByRole("heading", { name: /Review and pay/ })).toBeVisible();
+      await expect(page.getByText("$25 deposit holds the slot. Fully refundable if we have to move you for rain.")).toBeVisible();
+      await page.getByLabel("Your name").fill("Judge Jones");
+      await page.getByLabel("Mobile number").fill("(503) 555-0100");
+      await page.getByLabel("Email").fill("judge@example.com");
+      await nextIsOnScreen("pay");
+      await primary().click();
+
+      // Confirmation: final, specific, not a generic screen.
+      await expect(page.getByText("You're booked", { exact: true })).toBeVisible({ timeout: 10_000 });
+      const glance = page.getByLabel("Your booking at a glance");
+      await expect(glance).toContainText("3999 NE Test St");
+      await expect(glance).toContainText("Paid");
+      await expect(glance).toContainText(/\$25/);
+      await expect(glance).toContainText(/Rain plan/i);
+      await expect(page.getByText(/FH-[A-Z0-9]{4}/).first()).toBeVisible();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), "no sideways scroll").toBe(false);
+      expect(errors).toEqual([]);
+    });
+  }
+});
+
+test.describe("The customer's own screens prove the rules", () => {
+  async function toWhen(page: Page, parking: "garage" | "driveway" = "garage") {
+    await page.goto(`/book?v=suv&s=full&zip=97212&p=${parking}`);
+    await page.getByLabel("Street address").fill("3999 NE Rule St");
+    await page.getByRole("button", { name: /^Continue/ }).click();
+    await expect(page.getByRole("heading", { name: "When suits you?" })).toBeVisible();
+  }
+
+  test("times that can't be booked are crossed out with the reason, and the legend explains each kind", async ({ page }) => {
+    await toWhen(page);
+    // Some day has other jobs on it: pick the busiest open day the calendar offers.
+    const days = page.locator("fieldset button[aria-pressed]:not([disabled])");
+    const count = await days.count();
+    let sawBooked = false, sawDrive = false;
+    for (let i = 0; i < Math.min(count, 8) && !(sawBooked && sawDrive); i++) {
+      await days.nth(i).click();
+      sawBooked ||= (await page.getByRole("img", { name: /not available: Booked/ }).count()) > 0;
+      sawDrive ||= (await page.getByRole("img", { name: /not available: Drive time/ }).count()) > 0;
+    }
+    expect(sawBooked, "a day shows a time refused because another job is there").toBe(true);
+    expect(sawDrive, "a day shows a time refused for drive time").toBe(true);
+    const blocked = page.getByRole("img", { name: /not available/ }).first();
+    await expect(blocked).toHaveAttribute("aria-label", /\d{1,2}:\d{2} [AP]M, not available: .+/);
+    await expect(page.getByText("Why some times are crossed out")).toBeVisible();
+    // A crossed-out time is not a button: it cannot be chosen.
+    expect(await page.locator("button[aria-pressed]").filter({ has: page.locator("span.line-through") }).count()).toBe(0);
+  });
+
+  test("a full day is marked as at its limit and cannot be picked", async ({ page }) => {
+    await toWhen(page);
+    await expect(page.getByText(/means Dario already has 3 jobs that day/)).toBeVisible();
+    const full = page.locator("fieldset button[aria-pressed]:disabled").filter({ hasText: /Full/ }).first();
+    await expect(full).toBeVisible();
+    await expect(full).toBeDisabled();
+  });
+
+  test("the deposit is required: the review says so, and pressing Enter without details books nothing", async ({ page }) => {
+    await toWhen(page);
+    await page.locator("fieldset button[aria-pressed]:not([disabled])").first().click();
+    await page.locator("fieldset button[aria-pressed]").filter({ hasText: /^\d{1,2}:\d{2} [AP]M/ }).first().click();
+    await page.getByRole("button", { name: /^Continue/ }).click();
+    await expect(page.getByText("Required to hold the slot")).toBeVisible();
+    await expect(page.getByText(/No deposit, no slot/)).toBeVisible();
+    await expect(page.getByText("$25 deposit holds the slot. Fully refundable if we have to move you for rain.")).toBeVisible();
+    // No way to skip it: submitting with no details does not book anything.
+    await page.getByLabel("Your name").press("Enter");
+    await expect(page.getByRole("alert")).toContainText(/name, a mobile number/);
+    await expect(page).toHaveURL(/\/book/);
+    expect(await page.evaluate((key) => JSON.parse(localStorage.getItem(key)!).jobs.filter((j: { customer: { name: string } }) => j.customer.name === "").length, STORE_KEY)).toBe(0);
+  });
+});
+
+test.describe("Choosing a car and a service is obvious", () => {
+  test("each choice is marked Selected, the sidebar checks it off, and the bar says what to do next", async ({ page }) => {
+    await page.goto("/book");
+    const sidebar = page.getByRole("complementary", { name: "Your booking" });
+    const bar = page.getByRole("status").filter({ hasText: /choose|·/i }).first();
+
+    // Nothing chosen yet: the sidebar says so, and the bar tells you where to start.
+    await expect(sidebar).toContainText("Not chosen yet");
+    await expect(page.getByText("Choose your car, then a service")).toBeVisible();
+
+    // The car.
+    await page.getByText("SUV or wagon", { exact: true }).click();
+    await expect(page.locator("label").filter({ hasText: "SUV or wagon" }).getByText("Selected")).toBeVisible();
+    await expect(sidebar.getByText("SUV or wagon")).toBeVisible();
+    await expect(page.getByText("Now choose a service")).toBeVisible();
+
+    // The service: it is marked, the sidebar locks it in with the price, the bar summarises everything.
+    await page.getByText("Full Refresh", { exact: true }).first().click();
+    await expect(page.locator("label").filter({ hasText: "Full Refresh" }).getByText("Selected")).toBeVisible();
+    await expect(sidebar.getByText("Full Refresh").first()).toBeVisible();
+    await expect(sidebar).toContainText("$250");
+    await expect(sidebar).not.toContainText("Not chosen yet");
+    await expect(page.getByText(/SUV or wagon · Full Refresh · \$250/)).toBeVisible();
+    void bar;
+
+    // Continue is obvious and does what it says.
+    const cont = page.getByRole("button", { name: /^Continue/ });
+    await expect(cont).toBeVisible();
+    await cont.click();
+    await expect(page.getByRole("heading", { name: "Where do we find you?" })).toBeVisible();
+  });
+
+  test("changing your mind moves the mark: only one service is ever Selected", async ({ page }) => {
+    await page.goto("/book?v=sedan");
+    await page.getByText("Interior Reset", { exact: true }).first().click();
+    await page.getByText("Showroom Detail", { exact: true }).first().click();
+    await expect(page.locator("label").getByText("Selected").locator("visible=true")).toHaveCount(2); // one car and one service, and nothing else
+    await expect(page.getByRole("radio", { name: /Showroom Detail/ })).toBeChecked();
+    await expect(page.getByRole("radio", { name: /Interior Reset/ })).not.toBeChecked();
+  });
+});
+
+test.describe("The contact details can't be missed or fumbled", () => {
+  async function toReview(page: Page) {
+    await page.goto("/book?v=suv&s=full&zip=97212&p=garage");
+    await page.getByLabel("Street address").fill("3999 NE Test St");
+    await page.getByRole("button", { name: /^Continue/ }).click();
+    await page.locator("fieldset button[aria-pressed]:not([disabled])").first().click();
+    await page.locator("fieldset button[aria-pressed]").filter({ hasText: /^\d{1,2}:\d{2} [AP]M/ }).first().click();
+    await page.getByRole("button", { name: /^Continue/ }).click();
+    await expect(page.getByRole("heading", { name: /Review and pay/ })).toBeVisible();
+  }
+  const jobCount = (page: Page) => page.evaluate((key) => JSON.parse(localStorage.getItem(key)!).jobs.length as number, STORE_KEY);
+  const pay = (page: Page) => page.getByRole("button", { name: /^Book it/ });
+  const booked = (page: Page) => expect(page.getByText("You're booked", { exact: true })).toBeVisible({ timeout: 10_000 });
+
+  test("the three fields are at the top of the step, marked Required, and the cursor is already in the first", async ({ page }) => {
+    await toReview(page);
+    await expect(page.locator("#name")).toBeFocused();
+    const box = page.getByRole("region", { name: /who should we text/i });
+    await expect(box).toBeVisible();
+    await expect(box.getByText("Required")).toHaveCount(3);
+    await expect(page.locator("#name")).toHaveAttribute("aria-required", "true");
+    const vp = page.viewportSize()!;
+    const nb = await page.locator("#name").boundingBox();
+    expect(nb!.y + nb!.height, "the name field is on the first screen").toBeLessThanOrEqual(vp.height);
+    // The pinned bar says what's missing.
+    await expect(page.getByText("Add your name, mobile number and email above")).toBeVisible();
+  });
+
+  test("booking with nothing filled explains each field, keeps you on the fields, and books nothing", async ({ page }) => {
+    await toReview(page);
+    const before = await jobCount(page);
+    await pay(page).click();
+    const box = page.getByRole("region", { name: /who should we text/i });
+    await expect(box.getByRole("alert")).toContainText(/name, a mobile number and a valid email/);
+    await expect(box).toContainText("Add your name so Dario knows who to look for.");
+    await expect(box).toContainText(/mobile number with area code/);
+    await expect(box).toContainText(/email like name@example\.com/);
+    await expect(page.locator("#name")).toHaveAttribute("aria-invalid", "true");
+    await expect(page.locator("#name")).toBeFocused();
+    const nb = await page.locator("#name").boundingBox();
+    expect(nb!.y).toBeGreaterThanOrEqual(0); // still looking at the fields, not scrolled away
+    expect(await jobCount(page)).toBe(before);
+  });
+
+  test("each mistake is named on its own field, the cursor goes to the first bad one, and fixing them lets you book", async ({ page }) => {
+    await toReview(page);
+    await page.locator("#name").fill("Al");
+    await page.locator("#phone").fill("12345");
+    await page.locator("#email").fill("abc");
+    await pay(page).click();
+    await expect(page.locator("#phone")).toBeFocused(); // the name is fine; the phone is the first problem
+    await expect(page.locator("#phone-err")).toBeVisible();
+    await expect(page.locator("#email-err")).toBeVisible();
+    await expect(page.locator("#name-err")).toHaveCount(0);
+    await page.locator("#phone").fill("(503) 555-0100");
+    await expect(page.locator("#phone-err")).toHaveCount(0);
+    await page.locator("#email").fill("al@example.com");
+    await expect(page.getByLabel("looks good")).toHaveCount(3);
+    await expect(page.getByText("Ready to book, Al")).toBeVisible();
+    await pay(page).click();
+    await booked(page);
+  });
+
+  test("ordinary ways of typing a phone number and an email are accepted", async ({ page }) => {
+    for (const [phone, email] of [["503.555.0100", "ALEX@EXAMPLE.COM"], ["+1 503 555 0100", "  alex@mail.co.uk "], ["5035550100", "a.b+c@example.com"]]) {
+      await toReview(page);
+      await page.locator("#name").fill("Alex Rivera");
+      await page.locator("#phone").fill(phone);
+      await page.locator("#email").fill(email);
+      await pay(page).click();
+      await booked(page);
+    }
+  });
+
+  test("'Fill in sample details' makes the path one tap for anyone just trying it", async ({ page }) => {
+    await toReview(page);
+    await page.getByRole("button", { name: /Fill in sample details/ }).click();
+    await expect(page.locator("#name")).toHaveValue("Alex Rivera");
+    await expect(page.locator("#phone")).toHaveValue("(503) 555-0142");
+    await expect(page.locator("#email")).toHaveValue("alex@example.com");
+    await expect(page.getByText("Ready to book, Alex")).toBeVisible();
+    await pay(page).click();
+    await booked(page);
+  });
+
+  test("leaving a field empty flags it straight away, before you press anything", async ({ page }) => {
+    await toReview(page);
+    await page.locator("#name").fill("Alex");
+    await page.locator("#phone").focus();
+    await page.locator("#phone").blur();
+    await expect(page.locator("#phone-err")).toBeVisible();
+    await expect(page.locator("#email-err")).toHaveCount(0); // not yet visited, so not yet nagged
+  });
+});
+
+test.describe("A correct zip always gets through", () => {
+  const where = async (page: Page) => {
+    await page.goto("/book?v=sedan&s=express");
+    await expect(page.getByRole("heading", { name: "Where do we find you?" })).toBeVisible();
+  };
+  const cont = (page: Page) => page.getByRole("button", { name: /^Continue/ });
+  const parkAndAddress = async (page: Page) => {
+    await page.getByLabel("Street address").fill("1 Zip St");
+    await page.getByText("Garage", { exact: true }).click();
+  };
+
+  test("the 'enter your zip' message disappears the moment a valid zip is typed, without pressing anything", async ({ page }) => {
+    await where(page);
+    await parkAndAddress(page);
+    await cont(page).click();
+    await expect(page.getByRole("alert").filter({ hasText: "Enter your 5-digit zip" })).toBeVisible();
+    await page.getByLabel("Zip code").fill("97212");
+    await expect(page.getByRole("alert").filter({ hasText: "Enter your 5-digit zip" })).toHaveCount(0);
+    await cont(page).click();
+    await expect(page.getByRole("heading", { name: "When suits you?" })).toBeVisible();
+  });
+
+  test("a zip filled in without the page noticing (autofill, a script) is still read from the field", async ({ page }) => {
+    await where(page);
+    await parkAndAddress(page);
+    // Set the field values directly, firing no events at all, as some autofill does.
+    await page.evaluate(() => {
+      (document.getElementById("zip") as HTMLInputElement).value = "97212";
+    });
+    await cont(page).click();
+    await expect(page.getByRole("heading", { name: "When suits you?" })).toBeVisible();
+  });
+
+  test("a zip that was wrong, then fixed, is never left showing an error", async ({ page }) => {
+    await where(page);
+    await parkAndAddress(page);
+    await page.getByLabel("Zip code").fill("99999");
+    await expect(page.getByText(/We don't reach that zip yet/)).toBeVisible();
+    await cont(page).click();
+    await expect(page.getByRole("alert").filter({ hasText: "outside our service area" })).toBeVisible();
+    await page.getByLabel("Zip code").fill("97212");
+    await expect(page.getByText(/We don't reach that zip yet/)).toHaveCount(0);
+    await expect(page.getByRole("alert").filter({ hasText: "outside our service area" })).toHaveCount(0);
+    await cont(page).click();
+    await expect(page.getByRole("heading", { name: "When suits you?" })).toBeVisible();
+  });
+
+  for (const raw of ["97212-1234", "OR 97212", " 97212 ", "97 212", "97212abc", "9-7-2-1-2"]) {
+    test(`typing the zip as "${raw}" works`, async ({ page }) => {
+      await where(page);
+      await parkAndAddress(page);
+      await page.getByLabel("Zip code").fill(raw);
+      await expect(page.getByLabel("Zip code")).toHaveValue("97212");
+      await cont(page).click();
+      await expect(page.getByRole("heading", { name: "When suits you?" })).toBeVisible();
+    });
+  }
+
+  test("a zip from the text box is already there, and a stale message can't come back", async ({ page }) => {
+    await page.goto("/book?v=suv&s=interior&zip=97202");
+    await expect(page.getByLabel("Zip code")).toHaveValue("97202");
+    await page.getByLabel("Street address").fill("1 Umatilla St");
+    await page.getByText("Driveway", { exact: true }).click();
+    await cont(page).click();
+    await expect(page.getByRole("heading", { name: "When suits you?" })).toBeVisible();
+    // Back and forward again: no old message reappears.
+    await page.getByRole("button", { name: "Back" }).click();
+    await expect(page.getByRole("alert")).toHaveCount(0);
+    await cont(page).click();
+    await expect(page.getByRole("heading", { name: "When suits you?" })).toBeVisible();
+  });
+});
+
+test("contact details filled in without the page noticing (autofill, a script) still book, and are saved", async ({ page }) => {
+  await page.goto("/book?v=suv&s=full&zip=97212&p=garage");
+  await page.getByLabel("Street address").fill("3999 NE Test St");
+  await page.getByRole("button", { name: /^Continue/ }).click();
+  await page.locator("fieldset button[aria-pressed]:not([disabled])").first().click();
+  await page.locator("fieldset button[aria-pressed]").filter({ hasText: /^\d{1,2}:\d{2} [AP]M/ }).first().click();
+  await page.getByRole("button", { name: /^Continue/ }).click();
+  await expect(page.getByRole("heading", { name: /Review and pay/ })).toBeVisible();
+  // Values set directly, with no events at all.
+  await page.evaluate(() => {
+    for (const [id, v] of [["name", "Autofill Ana"], ["phone", "503-555-0177"], ["email", "ana@example.com"]] as const) (document.getElementById(id) as HTMLInputElement).value = v;
+  });
+  await page.getByRole("button", { name: /^Book it/ }).click();
+  await expect(page.getByText("You're booked", { exact: true })).toBeVisible({ timeout: 10_000 });
+  const saved = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)!).jobs.find((j: { customer: { name: string } }) => j.customer.name === "Autofill Ana")?.customer, STORE_KEY);
+  expect(saved).toMatchObject({ name: "Autofill Ana", phone: "503-555-0177", email: "ana@example.com" });
+});
+
+test.describe("A choice shows the instant it is made", () => {
+  // The suite normally runs with reduced motion so animations cannot make tests flaky. Here the animations are the point.
+  test.use({ contextOptions: { reducedMotion: "no-preference" } });
+
+  /** Tap a card and look at the very next frame: the sidebar row, the Selected tag and the bar must all already show it. */
+  async function tapAndLookNextFrame(page: Page, cardText: string, sidebarText: string, barText: RegExp) {
+    return page.evaluate(async ([card, side, bar]) => {
+      const label = [...document.querySelectorAll("label")].find((l) => l.textContent?.includes(card))!;
+      (label as HTMLElement).click();
+      await new Promise((r) => requestAnimationFrame(r));
+      const row = [...document.querySelectorAll("aside li")].find((li) => li.textContent?.includes(side));
+      const tag = [...label.querySelectorAll("span")].find((x) => x.textContent?.trim() === "Selected");
+      const status = [...document.querySelectorAll('[role="status"]')].find((x) => new RegExp(bar).test(x.textContent ?? ""));
+      return {
+        rowShown: !!row && Number(getComputedStyle(row).opacity) === 1,
+        tagShown: !!tag && getComputedStyle(tag).display !== "none",
+        barUpdated: !!status,
+      };
+    }, [cardText, sidebarText, barText.source] as const);
+  }
+
+  test("the car and the service both appear in the sidebar, on the card and in the bar on the very next frame", async ({ page }) => {
+    await page.goto("/book");
+    await expect(page.getByRole("heading", { name: "What are we cleaning?" })).toBeVisible();
+    const car = await tapAndLookNextFrame(page, "SUV or wagon", "SUV or wagon", /Now choose a service/);
+    expect(car).toEqual({ rowShown: true, tagShown: true, barUpdated: true });
+    const service = await tapAndLookNextFrame(page, "Full Refresh", "Full Refresh", /SUV or wagon · Full Refresh · \$250/);
+    expect(service).toEqual({ rowShown: true, tagShown: true, barUpdated: true });
+  });
+
+  test("changing the service replaces it straight away, with the new price", async ({ page }) => {
+    await page.goto("/book?v=suv");
+    await expect(page.getByRole("heading", { name: "What are we cleaning?" })).toBeVisible();
+    await tapAndLookNextFrame(page, "Interior Reset", "Interior Reset", /Interior Reset/);
+    const again = await tapAndLookNextFrame(page, "Showroom Detail", "Showroom Detail", /Showroom Detail · \$410/);
+    expect(again).toEqual({ rowShown: true, tagShown: true, barUpdated: true });
+    await expect(page.getByRole("complementary", { name: "Your booking" })).toContainText("$410");
+    await expect(page.getByRole("complementary", { name: "Your booking" })).not.toContainText("Interior Reset");
+  });
+});
+
+test.describe("The browser's Back and Forward walk the booking steps", () => {
+  const cont = (page: Page) => page.getByRole("button", { name: /^Continue/ });
+  const heading = (page: Page, name: string) => expect(page.getByRole("heading", { name })).toBeVisible();
+
+  test("Back goes to the previous step with everything still chosen, and Forward returns", async ({ page }) => {
+    await page.goto("/");
+    await page.getByRole("link", { name: /Book a detail/ }).first().click();
+    await page.getByText("SUV or wagon", { exact: true }).click();
+    await page.getByText("Full Refresh", { exact: true }).first().click();
+    await cont(page).click();
+    await heading(page, "Where do we find you?");
+    await page.getByLabel("Zip code").fill("97212");
+    await page.getByLabel("Street address").fill("3999 NE Back St");
+    await page.getByText("Garage", { exact: true }).click();
+    await cont(page).click();
+    await heading(page, "When suits you?");
+
+    // Back to "Where": what was typed is still there.
+    await page.goBack();
+    await heading(page, "Where do we find you?");
+    await expect(page.getByLabel("Street address")).toHaveValue("3999 NE Back St");
+    await expect(page.getByLabel("Zip code")).toHaveValue("97212");
+
+    // Back again to the car and service: still selected, sidebar still shows them.
+    await page.goBack();
+    await heading(page, "What are we cleaning?");
+    await expect(page.getByRole("radio", { name: /SUV or wagon/ })).toBeChecked();
+    await expect(page.getByRole("radio", { name: /Full Refresh/ })).toBeChecked();
+    await expect(page.getByRole("complementary", { name: "Your booking" })).toContainText("Full Refresh");
+
+    // Forward twice returns to the calendar.
+    await page.goForward();
+    await heading(page, "Where do we find you?");
+    await page.goForward();
+    await heading(page, "When suits you?");
+
+    // One more Back from the very first step leaves the booking: to the page we came from.
+    await page.goBack(); await page.goBack();
+    await page.goBack();
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("One man, one van");
+  });
+
+  test("the progress bar and the on-page Back button stay in step with the browser", async ({ page }) => {
+    await page.goto("/book?v=suv&s=full&zip=97212&p=garage");
+    await page.getByLabel("Street address").fill("3999 NE Bar St");
+    await cont(page).click();
+    await heading(page, "When suits you?");
+    await page.getByRole("button", { name: "1. Your car" }).click();
+    await heading(page, "What are we cleaning?");
+    await page.goBack();
+    await heading(page, "When suits you?");
+    await page.getByRole("button", { name: "Back", exact: true }).click();
+    await heading(page, "Where do we find you?");
+    await expect(page.getByLabel("Street address")).toHaveValue("3999 NE Bar St");
+  });
+
+  test("after booking, Back never shows a blank or broken page, and Forward returns to the confirmation", async ({ page }) => {
+    await bookThroughUi(page, "History Hal");
+    const confirmation = page.url();
+    await page.goBack();
+    await expect(page.getByRole("heading", { level: 2 }).first()).toBeVisible(); // something real is on screen
+    await expect(page.getByText("Something went wrong")).toHaveCount(0);
+    await page.goForward();
+    expect(page.url()).toBe(confirmation);
+    await expect(page.getByText("You're booked", { exact: true })).toBeVisible();
+  });
+
+  test("a step the form can't support is never shown: a stale entry falls back to the nearest valid one", async ({ page }) => {
+    await page.goto("/book?v=suv&s=full&zip=97212&p=garage");
+    await page.getByLabel("Street address").fill("3999 NE Stale St");
+    await cont(page).click();
+    await heading(page, "When suits you?");
+    // Reload loses the form (it is in memory), but the history entry still says step 2.
+    await page.reload();
+    await expect(page.getByRole("heading", { level: 2 }).first()).toBeVisible();
+    await expect(page.getByRole("heading", { name: "When suits you?" })).toHaveCount(0); // no calendar without an address
+  });
+});
+
+test.describe("Fast and keyboard-only hands", () => {
+  const toReview = async (page: Page) => {
+    await page.goto("/book?v=suv&s=full&zip=97212&p=garage");
+    await page.getByLabel("Street address").fill("3999 NE Fast St");
+    await page.getByRole("button", { name: /^Continue/ }).click();
+    await page.locator("fieldset button[aria-pressed]:not([disabled])").first().click();
+    await page.locator("fieldset button[aria-pressed]").filter({ hasText: /^\d{1,2}:\d{2} [AP]M/ }).first().click();
+    await page.getByRole("button", { name: /^Continue/ }).click();
+    await expect(page.getByRole("heading", { name: /Review and pay/ })).toBeVisible();
+  };
+
+  test("a double-click (or a double tap) on Pay makes exactly one booking", async ({ page }) => {
+    await toReview(page);
+    await page.getByRole("button", { name: /Fill in sample details/ }).click();
+    const before = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)!).jobs.length as number, STORE_KEY);
+    await page.getByRole("button", { name: /^Book it/ }).dblclick();
+    await expect(page.getByText("You're booked", { exact: true })).toBeVisible({ timeout: 10_000 });
+    const after = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)!).jobs.filter((j: { customer: { name: string } }) => j.customer.name === "Alex Rivera").length as number, STORE_KEY);
+    expect(after).toBe(1);
+    void before;
+  });
+
+  test("Enter in a field moves on, exactly like the button: address to calendar, and the last field books", async ({ page }) => {
+    await page.goto("/book?v=suv&s=full&zip=97212&p=garage");
+    await page.getByLabel("Street address").fill("3999 NE Enter St");
+    await page.getByLabel("Street address").press("Enter");
+    await expect(page.getByRole("heading", { name: "When suits you?" })).toBeVisible();
+    await page.locator("fieldset button[aria-pressed]:not([disabled])").first().click();
+    await page.locator("fieldset button[aria-pressed]").filter({ hasText: /^\d{1,2}:\d{2} [AP]M/ }).first().click();
+    await page.getByRole("button", { name: /^Continue/ }).click();
+    await page.getByLabel("Your name").fill("Enter Eli");
+    await page.getByLabel("Mobile number").fill("(503) 555-0111");
+    await page.getByLabel("Email").fill("eli@example.com");
+    await page.getByLabel("Email").press("Enter");
+    await expect(page.getByText("You're booked", { exact: true })).toBeVisible({ timeout: 10_000 });
+  });
+
+  test("the car and service can be chosen with the keyboard alone", async ({ page }) => {
+    await page.goto("/book");
+    await expect(page.getByRole("heading", { name: "What are we cleaning?" })).toBeVisible();
+    await page.getByRole("radio", { name: /SUV or wagon/ }).focus();
+    await page.keyboard.press("Space");
+    await page.getByRole("radio", { name: /Full Refresh/ }).focus();
+    await page.keyboard.press("Space");
+    await expect(page.getByRole("radio", { name: /SUV or wagon/ })).toBeChecked();
+    await expect(page.getByRole("radio", { name: /Full Refresh/ })).toBeChecked();
+    await page.getByRole("button", { name: /^Continue/ }).focus();
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("heading", { name: "Where do we find you?" })).toBeVisible();
   });
 });

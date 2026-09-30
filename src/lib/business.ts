@@ -105,6 +105,18 @@ export const NEIGHBORHOODS: Record<string, ZoneKey> = {
   beaverton: "W", tigard: "W", aloha: "W", "lake oswego": "W", westside: "W", "west side": "W",
 };
 
+/** A representative zip for each neighbourhood word, so "I'm in Sellwood" can fill in a zip code. */
+export const NEIGHBORHOOD_ZIPS: Record<string, string> = {
+  alberta: "97211", irvington: "97212", hollywood: "97213", concordia: "97211",
+  hawthorne: "97214", sellwood: "97202", woodstock: "97206", montavilla: "97215", division: "97202", "mt tabor": "97215",
+  "st johns": "97203", "st. johns": "97203", kenton: "97217", overlook: "97217", portsmouth: "97203",
+  pearl: "97209", "nob hill": "97210",
+  hillsdale: "97219", multnomah: "97219", downtown: "97201", "south waterfront": "97201",
+  beaverton: "97005", tigard: "97223", aloha: "97006", "lake oswego": "97005",
+};
+/** When only a broad area is given ("southeast"), a typical zip in that zone. */
+export const ZONE_ZIP: Record<ZoneKey, string> = { NE: "97212", SE: "97202", N: "97203", NW: "97209", SW: "97219", W: "97005" };
+
 // Vehicles, services, add-ons ---------------------------------------------------
 export interface Vehicle {
   key: VehicleKind;

@@ -9,6 +9,7 @@ import type { Job, State } from "./model";
 import { HOUR, addDays, atLocal, localDate, weekdayOf } from "./time";
 import { OPEN_WEEKDAYS, isCovered } from "./business";
 import { activeJobs } from "./engine";
+import { onLiveChange } from "./weather";
 
 const KEY = "fernhill:demo:v4";
 const MAX_AGE_MS = 6 * 24 * HOUR;
@@ -27,7 +28,10 @@ function load(): State {
     const raw = read();
     if (raw) {
       const s = JSON.parse(raw) as State;
-      if (s.v === 1 && Date.now() + s.clockOffsetMs - s.seededAt < MAX_AGE_MS) return s;
+      const shaped = s && s.v === 1 && Array.isArray(s.jobs) && Array.isArray(s.messages) && Array.isArray(s.waitlist) && Array.isArray(s.inquiries) && Array.isArray(s.stormDays)
+        && typeof s.clockOffsetMs === "number" && typeof s.seededAt === "number";
+      // Saved data from an older or damaged run is dropped rather than trusted.
+      if (shaped && Date.now() + s.clockOffsetMs - s.seededAt < MAX_AGE_MS) return s;
     }
   } catch { /* fall through to a fresh seed */ }
   return seedState(Date.now());
@@ -164,6 +168,13 @@ export const actions = {
   clearStorm() { set({ ...state, stormDays: [] }); },
   reset() { set(seedState(Date.now())); },
 };
+
+// When the live forecast arrives or is switched off, everything that reads the weather is recomputed,
+// and any rain checks that are now due run.
+onLiveChange(() => {
+  const next = tick(state, nowMs());
+  set(next === state ? { ...state } : next);
+});
 
 // Real-time heartbeat: the automations run while the page is open.
 if (typeof window !== "undefined") {

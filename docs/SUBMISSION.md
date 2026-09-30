@@ -69,29 +69,37 @@ His real-world friction, which the build takes on directly:
 3. **Craft and execution:** 60+ unit tests on the scheduling rules, Playwright journeys on desktop and mobile, axe-core WCAG 2.1 AA audits on every page and booking step, no horizontal scroll on any page at phone width, reduced-motion respected, working empty/error/race states (a slot taken mid-booking returns you to the calendar without losing anything).
 4. **Storytelling:** the landing page shows the same customer before and after; the owner console opens with "Nothing needs you right now."
 
-## Demo video: 2:40
+## For judges who never press play
 
-Record at 1440×900 (or a phone-width take for the mobile beat). Open **Demo controls** first, so viewers see where the storm button lives. Click **Reset** right before recording for a fresh week.
+Put this in the submission text: **open the app, then tap "Watch the 90-second story"**, or add `?story=1` to the link (on GitHub Pages: `.../Lovable_web_3app/#/?story=1`). It is a captioned, nine-step run over the real app (text to booking, the deposit, the owner's morning, a storm, customers moving themselves, the live van map, a running-late text, the result) with Next and Auto-play. It works on a phone and needs no sign-in.
+
+## Before you post
+
+The share card (`public/og.png`) is picked up from the link's page. It uses the address in `VITE_SITE_URL`, which defaults to the Lovable one (fernhill-spotlight.lovable.app). If your Lovable link is what you post, set `VITE_SITE_URL` to it in that project's build settings so the preview image and canonical link point there. Paste your link into the LinkedIn Post Inspector or an X draft first to see the card; both cache, so check before you publish.
+
+## Demo video: about 2:20 (under the 3-minute limit)
+
+**Before you press record (1 minute):** open your public link with `?demo=1` on the end (or press **Alt+D**). A small **Demo controls** button appears at the bottom right; customers never see it. Open it, click **Reset** (a fresh week), close the panel, then press **Alt+D** to hide it again. Then go to the landing page. Zoom the browser to 110% so text is readable in the recording. Do the whole thing in one take; no cuts needed.
 
 | Time | Screen | Do | Say |
 |---|---|---|---|
-| 0:00 | Landing hero | Let it sit | "This is Dario, a one-van car detailer in Portland. He loses evenings to texting, rainouts and no-shows. This is Fernhill, built with Lovable." |
-| 0:12 | Ask box | Tap the Subaru example → **Get real times** | "A customer writes the way they'd text a friend. Fernhill reads it, prices it, checks Dario's drive time, and offers three real slots. In seconds." |
-| 0:28 | Tap a time → Where step | Fill address, pick **Driveway** | "It knows her Outback with dog hair takes two and a half hours. She says the car is outside, and that matters later." |
-| 0:45 | When step | Point at day tiles and rain chips | "Only reachable times. Wet days are flagged; a dry day is recommended." |
-| 0:47 | When step, Southeast zip | Point at the "−$10" times | "And when Dario's already in her neighbourhood, the slot next to that job is cheaper. Every minute he doesn't drive is fifty cents off." |
-| 0:55 | You step → **Book** | Name, phone, email → Book | "A twenty-five dollar deposit holds it. Confirmed instantly." |
-| 1:05 | Confirmation | Scroll the queue | "Nothing left for anyone to do. Prep note, a one-tap confirm, a rain check, an on-my-way text are already queued." |
-| 1:15 | `/owner` | Show greeting, ledger tiles | "Dario's side. 'Nothing needs you' except one thing that really does: a request he doesn't offer. Everything else is done." |
-| 1:30 | Day sheet | Scroll the route | "His morning sheet: the route, drive times, a water refill before job three, gate codes, all filled in by customers." |
-| 1:45 | **Demo controls → Storm** | Click | "Now heavy rain is forecast for his busiest day. Watch the whole app turn to its rain palette." |
-| 1:52 | Messages → Rain filter | Point at rain offers | "Every customer with an outdoor car has been texted the nearest dry times. Covered cars are untouched." |
-| 2:05 | Open a customer link | Tap a dry option | "She picks Thursday. Her reminders move with her. Dario did nothing." |
-| 2:12 | Scroll to **Where's Bertha?** → **Play the day** | Let the van drive | "And instead of texting 'where are you?', she watches Bertha drive to her. Other customers' stops are anonymous." |
-| 2:15 | Waitlist tab | Show an offer out | "Her old slot went to the first person on the waitlist whose job fits. Nobody phoned anybody." |
-| 2:20 | **Demo controls → Dario runs 20 min behind** | Then open a customer link | "Bertha's running late? One tap. Every customer still to come gets a new arrival time, and their live map shifts. Dario typed nothing." |
-| 2:25 | **+6 hours** ×2 | Show a nudge/release | "And if someone never confirms, the slot is released three hours before, and refilled." |
-| 2:35 | Ledger | Point at hours saved | "Hours of admin, gone. Fernhill Mobile Detail. Built with Lovable." |
+| 0:00 | Landing page | Let it sit for two seconds | "This is Dario, a one-man, one-van car detailer in Portland. Rain, texting back and forth and no-shows eat his evenings. This is Fernhill." |
+| 0:12 | Text box | Type: *My dog wrecked my Outback. I'm in Sellwood. Friday morning?* Press **Get real times** | "A customer just texts the way they'd text a friend. Fernhill reads the car, the service, the neighbourhood and the day." |
+| 0:25 | Reply | Point at the chips and the three times | "Real prices, and only times Dario can actually reach, with his drive between jobs already counted." Click **Continue to booking**. |
+| 0:38 | Where step | Type a street, tap **Driveway**, Continue | "It's a driveway, so weather matters." |
+| 0:48 | When step | Point at the greyed-out rainy days, then the strip under the times | "Rainy days are blocked for an outdoor car. And this strip shows why this time works: the jobs already booked, the drive, even the water refill. A fourth job in a day is refused." |
+| 1:05 | Review and pay | Scroll the summary and price breakdown | "Before paying: exactly what she's booking, that it's weather-sensitive, and a twenty-five dollar deposit that comes off the total and is refunded if we move her for rain." Fill name, phone, email, press **Book it**. |
+| 1:25 | Confirmation | Point at the receipt boxes, then **Add to calendar** | "Confirmed. Date, address, deposit paid, the rain plan, and her own booking page to come back to." |
+| 1:40 | `/owner` | Show **Just booked** | "Dario's side: her booking is already here, checked against his limits. Job number, the drive, the deposit, the rain plan. Nothing for him to do." |
+| 1:55 | Backstage | Press **Alt+D**, open Demo controls, click **Storm hits the busiest outdoor day** (or use the guided story's storm step instead) | "Now a storm is forecast. Watch the whole app change." |
+| 2:05 | Owner page | Point at the rain colours, then **Weather moves this week** | "Every outdoor customer was offered dry days automatically. Covered cars are untouched. Dario typed nothing." |
+| 2:15 | Close | Back to the landing page | "Fernhill Mobile Detail. Built for the Lovable Challenge." |
+
+**Tips**
+- If you say a line badly, keep going. One honest take beats a stiff one.
+- Don't mention the demo controls by name; call it "a storm".
+- If anything goes wrong mid-take, click **Reset** in Demo controls and start again.
+- Upload the video, then paste its link in the post and in your Contra submission.
 
 ## Social post drafts
 

@@ -5,6 +5,14 @@ import { HOUR, fmtDay, fmtDayLong, fmtTime } from "./time";
 
 export const APP_HOST = "fernhill.app";
 export const manageLink = (job: Job) => `${APP_HOST}/b/${job.code}`;
+
+/** The customer's booking page as a URL that really opens it where the app is hosted. The single-file preview has no address of its own, so it keeps the brand host. */
+export function portalLink(code: string): string {
+  const mode = import.meta.env.VITE_ROUTER;
+  if (mode === "memory" || typeof window === "undefined") return `${APP_HOST}/b/${code}`;
+  const { origin, pathname } = window.location;
+  return mode === "hash" ? `${origin}${pathname}#/b/${code}` : `${origin}/b/${code}`;
+}
 const first = (name: string) => name.trim().split(/\s+/)[0] || "there";
 
 type Composed = { channel: Message["channel"]; direction: Message["direction"]; body: string };

@@ -28,13 +28,13 @@ test("landing with an answered inquiry", async ({ page }) => {
 test("booking: every step", async ({ page }) => {
   await page.goto("/book");
   await audit(page);
-  await page.getByRole("radio", { name: /Car/ }).first().check({ force: true });
-  await page.getByRole("radio", { name: /Express Wash/ }).check({ force: true });
+  await page.getByRole("radio", { name: /Car/ }).first().locator("xpath=ancestor::label").click();
+  await page.getByRole("radio", { name: /Express Wash/ }).locator("xpath=ancestor::label").click();
   await page.getByRole("button", { name: /Continue/ }).click();
   await audit(page);
   await page.getByLabel("Zip code").fill("97212");
   await page.getByLabel("Street address").fill("1 Main");
-  await page.getByRole("radio", { name: /^Driveway/ }).check({ force: true });
+  await page.getByRole("radio", { name: /^Driveway/ }).locator("xpath=ancestor::label").click();
   await page.getByRole("button", { name: /Continue/ }).click();
   await audit(page);
   await page.locator("fieldset button[aria-pressed]").filter({ hasText: /^\d{1,2}:\d{2} [AP]M$/ }).first().click();
@@ -51,7 +51,7 @@ for (const tab of ["Day sheet", "Week", "Messages sent", "Inquiries", "Waitlist"
 }
 
 test("owner with demo controls open", async ({ page }) => {
-  await page.goto("/owner");
+  await page.goto("/owner?demo=1");
   await page.getByRole("button", { name: "Open demo controls" }).click();
   await audit(page);
 });
@@ -97,7 +97,7 @@ test.describe("layout", () => {
 
 test.describe("rain mode (the weather-reactive palette)", () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto("/owner");
+    await page.goto("/owner?demo=1");
     const open = page.getByRole("button", { name: "Open demo controls" });
     await open.click();
     await page.getByRole("button", { name: /Storm hits the busiest outdoor day/ }).click();
@@ -130,9 +130,20 @@ test.describe("rain mode (the weather-reactive palette)", () => {
 });
 
 test("owner with the running-late banner and care plan tiles", async ({ page }) => {
-  await page.goto("/owner");
+  await page.goto("/owner?demo=1");
   await page.getByRole("button", { name: "Open demo controls" }).click();
   await page.getByRole("button", { name: /Dario runs 20 min behind/ }).click();
   await expect(page.getByText(/Running about 20 min behind/).first()).toBeVisible();
+  await audit(page);
+});
+
+test("the guided story panel, on the landing page and in rain mode", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Watch the 90-second story" }).click();
+  await expect(page.getByRole("region", { name: "Guided story" })).toContainText("Meet Dario");
+  await audit(page);
+  const panel = page.getByRole("region", { name: "Guided story" });
+  for (let i = 0; i < 4; i++) await panel.getByRole("button", { name: "Next" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-weather", "rain");
   await audit(page);
 });

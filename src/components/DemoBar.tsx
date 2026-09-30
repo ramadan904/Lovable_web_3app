@@ -1,17 +1,48 @@
-import { useState } from "react";
-import { Clock4, CloudLightning, FastForward, Moon, RotateCcw, SunMedium, FlaskConical, UserX, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useLocation } from "react-router-dom";
+import { Clock4, CloudLightning, Globe, Play, FastForward, Moon, RotateCcw, SunMedium, FlaskConical, UserX, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { useNow } from "@/hooks/useNow";
 import { actions, useStore } from "@/lib/store";
+import { useStory, storyStore } from "@/lib/story";
+import { setLiveWeather, useLiveStatus } from "@/lib/weather";
 import { HOUR, fmtDay, fmtDate, fmtStamp } from "@/lib/time";
+
+const FLAG = "fernhill:demo-controls";
+const readFlag = () => { try { return localStorage.getItem(FLAG) === "1"; } catch { return false; } };
+const writeFlag = (on: boolean) => { try { if (on) localStorage.setItem(FLAG, "1"); else localStorage.removeItem(FLAG); } catch { /* private mode */ } };
+
+/**
+ * The controls are backstage: no page shows them by default, so nothing on the customer's path or the owner's
+ * page looks like a demo. They appear only once switched on with ?demo=1 (off with ?demo=0) or Alt+D.
+ */
+function useDemoAccess(): boolean {
+  const { search } = useLocation();
+  const [flag, setFlag] = useState(readFlag);
+  useEffect(() => {
+    const q = new URLSearchParams(search).get("demo");
+    if (q === "1" || q === "0") { writeFlag(q === "1"); setFlag(q === "1"); }
+  }, [search]);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.altKey && !e.ctrlKey && !e.metaKey && e.key.toLowerCase() === "d") setFlag((on) => { writeFlag(!on); return !on; });
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+  return flag;
+}
 
 /** The controls that make a week of a small business watchable in a minute. */
 export function DemoBar() {
+  const allowed = useDemoAccess();
   const [open, setOpen] = useState(false);
   const now = useNow();
   const state = useStore();
   const shifted = Math.round(state.clockOffsetMs / HOUR);
+  const story = useStory();
+  const liveWx = useLiveStatus();
 
   /** On phones the panel covers half the screen, so it gets out of the way after each action. */
   const done = () => {
@@ -27,6 +58,8 @@ export function DemoBar() {
     });
   };
 
+  // The story has its own panel; keep the two out of each other's way.
+  if (story.active || !allowed) return null;
   if (!open) {
     return (
       <button
@@ -53,6 +86,7 @@ export function DemoBar() {
         </button>
       </div>
       <div className="grid gap-2">
+        <Button variant="outline" size="sm" className="border-background/30 bg-transparent text-background hover:bg-background/10 hover:text-background" onClick={() => { setOpen(false); storyStore.start(); }}><Play /> Play the 90-second story</Button>
         <Button variant="sun" size="sm" onClick={storm}><CloudLightning /> Storm hits the busiest outdoor day</Button>
         <div className="grid grid-cols-2 gap-2">
           <Button variant="outline" size="sm" className="border-background/30 bg-transparent text-background hover:bg-background/10 hover:text-background" onClick={() => { done(); actions.fastForward(1); toast("Fast-forwarded 1 hour", { description: "Reminders, nudges and releases fire as their times pass." }); }}>
@@ -94,6 +128,16 @@ export function DemoBar() {
           <Button variant="outline" size="sm" className="border-background/30 bg-transparent text-background hover:bg-background/10 hover:text-background" onClick={() => { done(); actions.reset(); toast("Demo reset to a fresh week"); }}>
             <RotateCcw /> Reset
           </Button>
+        </div>
+        <div>
+          <Button variant="outline" size="sm" aria-pressed={liveWx.state === "live" || liveWx.state === "loading"} disabled={liveWx.state === "loading"} className="w-full border-background/30 bg-transparent text-background hover:bg-background/10 hover:text-background aria-pressed:bg-background/15" onClick={() => { void setLiveWeather(liveWx.state !== "live"); }}>
+            <Globe /> {liveWx.state === "live" ? "Using the live Portland forecast" : liveWx.state === "loading" ? "Fetching the forecast…" : "Use the live Portland forecast"}
+          </Button>
+          <p className="mt-1 text-xs text-background/70" role="status">
+            {liveWx.state === "live" ? `Real rain chances from Open-Meteo for the next ${liveWx.days} days. Tap again for the steady demo forecast.`
+              : liveWx.state === "failed" ? "Couldn't reach the forecast service, so the demo forecast is still in use."
+              : "Off: a steady demo forecast, so recordings repeat exactly."}
+          </p>
         </div>
         {state.stormDays.length > 0 && <p className="text-xs text-sun">Storm forecast: {state.stormDays.map((d) => fmtDay(new Date(`${d}T20:00:00Z`).getTime())).join(", ")}</p>}
       </div>
