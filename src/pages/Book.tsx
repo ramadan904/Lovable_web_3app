@@ -63,11 +63,11 @@ function RadioCard({ name, value, checked, onChange, children, className }: { na
   return (
     <label className={cn("relative block cursor-pointer", className)}>
       <input type="radio" name={name} value={value} checked={checked} onChange={onChange} className="peer sr-only" />
-      <span className="flex h-full flex-col gap-1 rounded-lg border bg-card p-4 transition-colors peer-checked:border-primary peer-checked:bg-fern-soft peer-checked:shadow-card peer-focus-visible:outline peer-focus-visible:outline-[3px] peer-focus-visible:outline-offset-2 peer-focus-visible:outline-sun hover:border-foreground/50">
+      <span className="flex h-full flex-col gap-1 rounded-lg border bg-card p-4 transition-colors peer-checked:border-primary peer-checked:bg-fern-soft peer-checked:shadow-card peer-checked:ring-2 peer-checked:ring-primary peer-focus-visible:outline peer-focus-visible:outline-[3px] peer-focus-visible:outline-offset-2 peer-focus-visible:outline-sun hover:border-foreground/50">
         {children}
       </span>
-      <span className="pointer-events-none absolute right-3 top-3 hidden size-6 items-center justify-center rounded-full bg-primary text-primary-foreground peer-checked:flex" aria-hidden="true">
-        <Check className="size-3.5" />
+      <span className="pointer-events-none absolute -top-2.5 right-3 hidden items-center gap-1 rounded-full bg-primary px-2.5 py-0.5 text-xs font-bold text-primary-foreground shadow-card peer-checked:inline-flex" aria-hidden="true">
+        <Check className="size-3" /> Selected
       </span>
     </label>
   );
@@ -130,6 +130,23 @@ export default function Book() {
     const tooWet = !!form.parking && needsDryDay(form.addons, form.parking) && forecastFor(localDate(form.startMs), getState().stormDays).rain >= CURE_RAIN_LIMIT;
     if (gone || tooWet) setForm((f) => ({ ...f, startMs: null }));
   }, [step]); // eslint-disable-line react-hooks/exhaustive-deps
+
+
+  // What has been chosen so far and what comes next: shown beside the Continue button so progress is never a guess.
+  const guide: { ready: boolean; text: string; next: string } | null = (() => {
+    if (step === 0) {
+      if (form.vehicle && form.service && q) return { ready: true, text: `${VEHICLES[form.vehicle].name} · ${SERVICES[form.service].name} · ${dollars(q.totalCents)}`, next: "address" };
+      return { ready: false, text: !form.vehicle ? "Choose your car, then a service" : "Now choose a service", next: "address" };
+    }
+    if (step === 1) {
+      const ready = !!zone && !!form.address.trim() && !!form.parking;
+      return { ready, text: ready ? `${form.address}, ${ZONES[zone!].name}` : !zone ? "Add your zip code" : !form.address.trim() ? "Add your street address" : "Say where the car will be parked", next: "times" };
+    }
+    if (step === 2) {
+      return { ready: !!form.startMs, text: form.startMs ? `${fmtDayLong(form.startMs)} at ${fmtTime(form.startMs)}` : "Pick a day, then a time", next: "review" };
+    }
+    return null;
+  })();
 
   const next = () => {
     if (step === 0) {
@@ -399,15 +416,27 @@ export default function Book() {
           {error && step !== 2 && <p ref={errorRef} role="alert" className="rounded-md border border-danger/30 bg-danger-soft px-4 py-3 text-sm font-semibold text-danger">{error}</p>}
           {error && step === 2 && !joining && <p ref={errorRef} role="alert" className="rounded-md border border-danger/30 bg-danger-soft px-4 py-3 text-sm font-semibold text-danger">{error}</p>}
 
-          <div className="sticky bottom-0 z-20 flex items-center justify-between gap-3 border-t bg-background/95 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/85">
-            {step > 0 ? <Button type="button" variant="ghost" onClick={() => { setError(null); setStep(step - 1); }}><ArrowLeft /> Back</Button> : <Button asChild variant="ghost"><Link to="/"><ArrowLeft /> Home</Link></Button>}
-            {step < 3 ? (
-              <Button type="submit" size="lg" className="flex-1 sm:flex-none">Continue <ArrowRight /></Button>
-            ) : (
-              <Button type="submit" size="lg" variant="sun" disabled={busy} aria-label={busy ? "Holding your slot" : `Book it · pay ${dollars(DEPOSIT_CENTS)} deposit`} className="min-w-0 flex-1 sm:flex-none">
-                {busy ? <><Loader2 className="animate-spin" aria-hidden="true" /> Holding your slot…</> : <><LockKeyhole aria-hidden="true" /> <span className="sm:hidden" aria-hidden="true">{`Pay ${dollars(DEPOSIT_CENTS)} & book`}</span><span className="hidden sm:inline" aria-hidden="true">{`Book it · pay ${dollars(DEPOSIT_CENTS)} deposit`}</span></>}
-              </Button>
+          <div className="sticky bottom-0 z-20 border-t bg-background/95 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/85">
+            {guide && (
+              <p role="status" className={cn("mb-2 flex items-center gap-2 text-sm font-semibold", guide.ready ? "text-fern-ink" : "text-muted-foreground")}>
+                {guide.ready
+                  ? <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground" aria-hidden="true"><Check className="size-3" /></span>
+                  : <span className="size-2.5 shrink-0 rounded-full bg-sun" aria-hidden="true" />}
+                <span className="min-w-0 [overflow-wrap:anywhere]">{guide.text}</span>
+              </p>
             )}
+            <div className="flex items-center justify-between gap-3">
+              {step > 0 ? <Button type="button" variant="ghost" onClick={() => { setError(null); setStep(step - 1); }}><ArrowLeft /> Back</Button> : <Button asChild variant="ghost"><Link to="/"><ArrowLeft /> Home</Link></Button>}
+              {step < 3 ? (
+                <Button type="submit" size="lg" variant={guide?.ready ? "default" : "outline"} className={cn("min-w-0 flex-1 sm:flex-none", guide?.ready && "shadow-lift ring-2 ring-sun ring-offset-2 ring-offset-background")}>
+                  Continue<span className="hidden sm:inline"> to {guide?.next ?? "the next step"}</span> <ArrowRight />
+                </Button>
+              ) : (
+                <Button type="submit" size="lg" variant="sun" disabled={busy} aria-label={busy ? "Holding your slot" : `Book it · pay ${dollars(DEPOSIT_CENTS)} deposit`} className="min-w-0 flex-1 sm:flex-none">
+                  {busy ? <><Loader2 className="animate-spin" aria-hidden="true" /> Holding your slot…</> : <><LockKeyhole aria-hidden="true" /> <span className="sm:hidden" aria-hidden="true">{`Pay ${dollars(DEPOSIT_CENTS)} & book`}</span><span className="hidden sm:inline" aria-hidden="true">{`Book it · pay ${dollars(DEPOSIT_CENTS)} deposit`}</span></>}
+                </Button>
+              )}
+            </div>
           </div>
         </form>
 
@@ -511,8 +540,18 @@ function Summary({ form, q, zone, covered }: { form: Form; q: ReturnType<typeof 
       <div className="card overflow-hidden">
         <div className="bg-primary px-5 py-4 text-primary-foreground">
           <p className="eyebrow !text-primary-foreground/70">Your detail</p>
-          <p className="font-display text-xl font-bold">{form.service ? SERVICES[form.service].name : "Choose a service"}</p>
-          <p className="text-sm text-primary-foreground/80">{form.vehicle ? `${form.label || VEHICLES[form.vehicle].name}` : "No car chosen yet"}</p>
+          <ul className="mt-2 space-y-2">
+            {[
+              { done: !!form.vehicle, label: "Car", text: form.vehicle ? (form.label || VEHICLES[form.vehicle].name) : "Not chosen yet" },
+              { done: !!form.service, label: "Service", text: form.service ? SERVICES[form.service].name : "Not chosen yet" },
+            ].map((row) => (
+              <li key={`${row.label}-${row.text}`} className="flex items-center gap-2.5 animate-rise-in">
+                <span className={cn("flex size-5 shrink-0 items-center justify-center rounded-full", row.done ? "bg-sun text-sun-ink" : "border border-dashed border-primary-foreground/50")} aria-hidden="true">{row.done && <Check className="size-3" />}</span>
+                <span className="text-xs font-semibold uppercase tracking-wide text-primary-foreground/70">{row.label}</span>
+                <span className={cn("font-display text-lg leading-tight", row.done ? "font-bold" : "text-base font-medium text-primary-foreground/70")}>{row.text}</span>
+              </li>
+            ))}
+          </ul>
         </div>
         <div className="space-y-3 p-5 text-sm">
           {q ? (

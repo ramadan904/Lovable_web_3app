@@ -997,3 +997,45 @@ test.describe("The customer's own screens prove the rules", () => {
     expect(await page.evaluate((key) => JSON.parse(localStorage.getItem(key)!).jobs.filter((j: { customer: { name: string } }) => j.customer.name === "").length, STORE_KEY)).toBe(0);
   });
 });
+
+test.describe("Choosing a car and a service is obvious", () => {
+  test("each choice is marked Selected, the sidebar checks it off, and the bar says what to do next", async ({ page }) => {
+    await page.goto("/book");
+    const sidebar = page.getByRole("complementary", { name: "Your booking" });
+    const bar = page.getByRole("status").filter({ hasText: /choose|·/i }).first();
+
+    // Nothing chosen yet: the sidebar says so, and the bar tells you where to start.
+    await expect(sidebar).toContainText("Not chosen yet");
+    await expect(page.getByText("Choose your car, then a service")).toBeVisible();
+
+    // The car.
+    await page.getByText("SUV or wagon", { exact: true }).click();
+    await expect(page.locator("label").filter({ hasText: "SUV or wagon" }).getByText("Selected")).toBeVisible();
+    await expect(sidebar.getByText("SUV or wagon")).toBeVisible();
+    await expect(page.getByText("Now choose a service")).toBeVisible();
+
+    // The service: it is marked, the sidebar locks it in with the price, the bar summarises everything.
+    await page.getByText("Full Refresh", { exact: true }).first().click();
+    await expect(page.locator("label").filter({ hasText: "Full Refresh" }).getByText("Selected")).toBeVisible();
+    await expect(sidebar.getByText("Full Refresh").first()).toBeVisible();
+    await expect(sidebar).toContainText("$250");
+    await expect(sidebar).not.toContainText("Not chosen yet");
+    await expect(page.getByText(/SUV or wagon · Full Refresh · \$250/)).toBeVisible();
+    void bar;
+
+    // Continue is obvious and does what it says.
+    const cont = page.getByRole("button", { name: /^Continue/ });
+    await expect(cont).toBeVisible();
+    await cont.click();
+    await expect(page.getByRole("heading", { name: "Where do we find you?" })).toBeVisible();
+  });
+
+  test("changing your mind moves the mark: only one service is ever Selected", async ({ page }) => {
+    await page.goto("/book?v=sedan");
+    await page.getByText("Interior Reset", { exact: true }).first().click();
+    await page.getByText("Showroom Detail", { exact: true }).first().click();
+    await expect(page.locator("label").getByText("Selected").locator("visible=true")).toHaveCount(2); // one car and one service, and nothing else
+    await expect(page.getByRole("radio", { name: /Showroom Detail/ })).toBeChecked();
+    await expect(page.getByRole("radio", { name: /Interior Reset/ })).not.toBeChecked();
+  });
+});
