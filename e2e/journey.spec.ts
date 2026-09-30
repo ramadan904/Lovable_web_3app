@@ -37,9 +37,9 @@ async function bookThroughUi(page: Page, name = "Test Driver", dayIndex = 0) {
 async function demo(page: Page, name: RegExp) {
   const open = page.getByRole("button", { name: "Open demo controls" });
   const target = page.getByRole("button", { name });
-  // The controls are backstage: on the owner's page they are always there; elsewhere Alt+D brings them up.
+  // The controls are backstage on every page: Alt+D brings them up.
   await page.getByRole("banner").waitFor(); // the app has drawn (and is not mid-reload)
-  if (!page.url().includes("/owner") && !(await open.isVisible()) && !(await target.isVisible())) await page.keyboard.press("Alt+D");
+  if (!(await open.isVisible()) && !(await target.isVisible())) await page.keyboard.press("Alt+D");
   await open.or(target).first().waitFor();
   if (await open.isVisible()) await open.click();
   await target.click();
@@ -180,7 +180,7 @@ test.describe("Where's Bertha?", () => {
 });
 
 test("every fast-forward click moves the demo clock on screen straight away", async ({ page }) => {
-  await page.goto("/owner");
+  await page.goto("/owner?demo=1");
   const read = async () => {
     const open = page.getByRole("button", { name: "Open demo controls" });
     const panel = page.getByRole("region", { name: "Demo controls" });
@@ -672,7 +672,7 @@ test.describe("The guided story", () => {
     await panel.getByRole("button", { name: "Close the story" }).click();
     await expect(panel).toHaveCount(0);
     await page.goto("/owner");
-    await expect(page.getByRole("button", { name: "Open demo controls" })).toBeVisible(); // backstage, where it belongs
+    await expect(page.getByRole("button", { name: "Open demo controls" })).toHaveCount(0); // backstage everywhere
   });
 });
 
@@ -731,7 +731,7 @@ test.describe("Resilience and the live forecast", () => {
 test.describe("The customer's path has no backstage chrome", () => {
   const demoButton = (page: Page) => page.getByRole("button", { name: "Open demo controls" });
 
-  test("no demo controls on the way to a booking or on the confirmation; they live on the owner's page, or come up on request", async ({ page }) => {
+  test("no page shows demo controls by default (landing, booking, confirmation, owner); they come up only on request", async ({ page }) => {
     for (const path of ["/", "/book"]) {
       await page.goto(path);
       await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
@@ -740,7 +740,8 @@ test.describe("The customer's path has no backstage chrome", () => {
     await bookThroughUi(page, "Path Tester");
     await expect(demoButton(page)).toHaveCount(0); // not even on the confirmation
     await page.goto("/owner");
-    await expect(demoButton(page)).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    await expect(demoButton(page)).toHaveCount(0); // nor on the owner's page
 
     await page.goto("/");
     await page.keyboard.press("Alt+D");

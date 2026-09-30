@@ -14,11 +14,11 @@ const readFlag = () => { try { return localStorage.getItem(FLAG) === "1"; } catc
 const writeFlag = (on: boolean) => { try { if (on) localStorage.setItem(FLAG, "1"); else localStorage.removeItem(FLAG); } catch { /* private mode */ } };
 
 /**
- * The controls are backstage: customers never see them on the way to a booking. They show on the owner's
- * page, and anywhere else once switched on with ?demo=1 (off with ?demo=0) or the Alt+D shortcut.
+ * The controls are backstage: no page shows them by default, so nothing on the customer's path or the owner's
+ * page looks like a demo. They appear only once switched on with ?demo=1 (off with ?demo=0) or Alt+D.
  */
 function useDemoAccess(): boolean {
-  const { pathname, search } = useLocation();
+  const { search } = useLocation();
   const [flag, setFlag] = useState(readFlag);
   useEffect(() => {
     const q = new URLSearchParams(search).get("demo");
@@ -31,7 +31,7 @@ function useDemoAccess(): boolean {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
-  return flag || pathname.startsWith("/owner");
+  return flag;
 }
 
 /** The controls that make a week of a small business watchable in a minute. */

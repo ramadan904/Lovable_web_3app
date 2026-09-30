@@ -376,8 +376,8 @@ export default function Book() {
                 <div className="flex items-center gap-3 rounded-md border bg-background p-3 text-sm">
                   <CreditCard className="size-5 shrink-0 text-fern" aria-hidden="true" />
                   <div className="min-w-0 flex-1">
-                    <p className="font-semibold">Visa •••• 4242 <span className="font-normal text-muted-foreground">(demo card)</span></p>
-                    <p className="text-muted-foreground">One tap, no forms. Nothing is charged in this demo.</p>
+                    <p className="font-semibold">Visa •••• 4242</p>
+                    <p className="text-muted-foreground">One tap, no forms.</p>
                   </div>
                   <span className="chip border-fern/30 bg-fern-soft text-fern-ink">Secure</span>
                 </div>
@@ -391,7 +391,7 @@ export default function Book() {
                   <li>Rain on an outdoor job? We move you free, to a dry day you choose. If you'd rather not move, cancel for a full refund at any time.</li>
                 </ul>
                 <p className="text-sm font-semibold">No deposit, no slot: a time is only held once this is paid.</p>
-                <p className="text-xs text-muted-foreground">Demo build: no card is charged. In production this runs through Stripe, with Apple Pay and Google Pay.</p>
+                <p className="text-xs text-muted-foreground">No card is charged in this demo.</p>
               </div>
             </div>
           )}

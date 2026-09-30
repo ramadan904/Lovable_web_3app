@@ -79,7 +79,7 @@ The share card (`public/og.png`) is picked up from the link's page. It uses the 
 
 ## Demo video: about 2:20 (under the 3-minute limit)
 
-**Before you press record (1 minute):** open your public link in a fresh window. Go to `/owner`, open **Demo controls**, click **Reset** (a fresh week), close the panel. Then go back to the landing page. Zoom the browser to 110% so text is readable in the recording. Do the whole thing in one take; no cuts needed.
+**Before you press record (1 minute):** open your public link with `?demo=1` on the end (or press **Alt+D**). A small **Demo controls** button appears at the bottom right; customers never see it. Open it, click **Reset** (a fresh week), close the panel, then press **Alt+D** to hide it again. Then go to the landing page. Zoom the browser to 110% so text is readable in the recording. Do the whole thing in one take; no cuts needed.
 
 | Time | Screen | Do | Say |
 |---|---|---|---|
@@ -91,7 +91,7 @@ The share card (`public/og.png`) is picked up from the link's page. It uses the 
 | 1:05 | Review and pay | Scroll the summary and price breakdown | "Before paying: exactly what she's booking, that it's weather-sensitive, and a twenty-five dollar deposit that comes off the total and is refunded if we move her for rain." Fill name, phone, email, press **Book it**. |
 | 1:25 | Confirmation | Point at the receipt boxes, then **Add to calendar** | "Confirmed. Date, address, deposit paid, the rain plan, and her own booking page to come back to." |
 | 1:40 | `/owner` | Show **Just booked** | "Dario's side: her booking is already here, checked against his limits. Job number, the drive, the deposit, the rain plan. Nothing for him to do." |
-| 1:55 | Demo controls | Open the panel, click **Storm hits the busiest outdoor day** | "Now a storm is forecast. Watch the whole app change." |
+| 1:55 | Backstage | Press **Alt+D**, open Demo controls, click **Storm hits the busiest outdoor day** (or use the guided story's storm step instead) | "Now a storm is forecast. Watch the whole app change." |
 | 2:05 | Owner page | Point at the rain colours, then **Weather moves this week** | "Every outdoor customer was offered dry days automatically. Covered cars are untouched. Dario typed nothing." |
 | 2:15 | Close | Back to the landing page | "Fernhill Mobile Detail. Built for the Lovable Challenge." |
 

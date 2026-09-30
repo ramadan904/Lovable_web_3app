@@ -51,7 +51,7 @@ for (const tab of ["Day sheet", "Week", "Messages sent", "Inquiries", "Waitlist"
 }
 
 test("owner with demo controls open", async ({ page }) => {
-  await page.goto("/owner");
+  await page.goto("/owner?demo=1");
   await page.getByRole("button", { name: "Open demo controls" }).click();
   await audit(page);
 });
@@ -97,7 +97,7 @@ test.describe("layout", () => {
 
 test.describe("rain mode (the weather-reactive palette)", () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto("/owner");
+    await page.goto("/owner?demo=1");
     const open = page.getByRole("button", { name: "Open demo controls" });
     await open.click();
     await page.getByRole("button", { name: /Storm hits the busiest outdoor day/ }).click();
@@ -130,7 +130,7 @@ test.describe("rain mode (the weather-reactive palette)", () => {
 });
 
 test("owner with the running-late banner and care plan tiles", async ({ page }) => {
-  await page.goto("/owner");
+  await page.goto("/owner?demo=1");
   await page.getByRole("button", { name: "Open demo controls" }).click();
   await page.getByRole("button", { name: /Dario runs 20 min behind/ }).click();
   await expect(page.getByText(/Running about 20 min behind/).first()).toBeVisible();

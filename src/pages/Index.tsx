@@ -238,7 +238,7 @@ export default function Index() {
                 );
               })}
             </ul>
-            <p className="mt-4 text-sm text-muted-foreground">Illustrative forecast for the demo. In production this reads a real weather API.</p>
+            <p className="mt-4 text-sm text-muted-foreground">Portland forecast for the coming week. Rain over 70% moves outdoor jobs to a dry day.</p>
           </div>
         </div>
       </section>
