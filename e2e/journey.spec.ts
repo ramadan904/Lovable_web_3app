@@ -1225,3 +1225,44 @@ test("contact details filled in without the page noticing (autofill, a script) s
   const saved = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)!).jobs.find((j: { customer: { name: string } }) => j.customer.name === "Autofill Ana")?.customer, STORE_KEY);
   expect(saved).toMatchObject({ name: "Autofill Ana", phone: "503-555-0177", email: "ana@example.com" });
 });
+
+test.describe("A choice shows the instant it is made", () => {
+  // The suite normally runs with reduced motion so animations cannot make tests flaky. Here the animations are the point.
+  test.use({ contextOptions: { reducedMotion: "no-preference" } });
+
+  /** Tap a card and look at the very next frame: the sidebar row, the Selected tag and the bar must all already show it. */
+  async function tapAndLookNextFrame(page: Page, cardText: string, sidebarText: string, barText: RegExp) {
+    return page.evaluate(async ([card, side, bar]) => {
+      const label = [...document.querySelectorAll("label")].find((l) => l.textContent?.includes(card))!;
+      (label as HTMLElement).click();
+      await new Promise((r) => requestAnimationFrame(r));
+      const row = [...document.querySelectorAll("aside li")].find((li) => li.textContent?.includes(side));
+      const tag = [...label.querySelectorAll("span")].find((x) => x.textContent?.trim() === "Selected");
+      const status = [...document.querySelectorAll('[role="status"]')].find((x) => new RegExp(bar).test(x.textContent ?? ""));
+      return {
+        rowShown: !!row && Number(getComputedStyle(row).opacity) === 1,
+        tagShown: !!tag && getComputedStyle(tag).display !== "none",
+        barUpdated: !!status,
+      };
+    }, [cardText, sidebarText, barText.source] as const);
+  }
+
+  test("the car and the service both appear in the sidebar, on the card and in the bar on the very next frame", async ({ page }) => {
+    await page.goto("/book");
+    await expect(page.getByRole("heading", { name: "What are we cleaning?" })).toBeVisible();
+    const car = await tapAndLookNextFrame(page, "SUV or wagon", "SUV or wagon", /Now choose a service/);
+    expect(car).toEqual({ rowShown: true, tagShown: true, barUpdated: true });
+    const service = await tapAndLookNextFrame(page, "Full Refresh", "Full Refresh", /SUV or wagon · Full Refresh · \$250/);
+    expect(service).toEqual({ rowShown: true, tagShown: true, barUpdated: true });
+  });
+
+  test("changing the service replaces it straight away, with the new price", async ({ page }) => {
+    await page.goto("/book?v=suv");
+    await expect(page.getByRole("heading", { name: "What are we cleaning?" })).toBeVisible();
+    await tapAndLookNextFrame(page, "Interior Reset", "Interior Reset", /Interior Reset/);
+    const again = await tapAndLookNextFrame(page, "Showroom Detail", "Showroom Detail", /Showroom Detail · \$410/);
+    expect(again).toEqual({ rowShown: true, tagShown: true, barUpdated: true });
+    await expect(page.getByRole("complementary", { name: "Your booking" })).toContainText("$410");
+    await expect(page.getByRole("complementary", { name: "Your booking" })).not.toContainText("Interior Reset");
+  });
+});

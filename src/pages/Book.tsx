@@ -674,7 +674,7 @@ function Summary({ form, q, zone, covered }: { form: Form; q: ReturnType<typeof 
               { done: !!form.vehicle, label: "Car", text: form.vehicle ? (form.label || VEHICLES[form.vehicle].name) : "Not chosen yet" },
               { done: !!form.service, label: "Service", text: form.service ? SERVICES[form.service].name : "Not chosen yet" },
             ].map((row) => (
-              <li key={`${row.label}-${row.text}`} className="flex items-center gap-2.5 animate-rise-in">
+              <li key={`${row.label}-${row.text}`} className="pick-flash -mx-2 flex items-center gap-2.5 rounded-md px-2 py-0.5">
                 <span className={cn("flex size-5 shrink-0 items-center justify-center rounded-full", row.done ? "bg-sun text-sun-ink" : "border border-dashed border-primary-foreground/50")} aria-hidden="true">{row.done && <Check className="size-3" />}</span>
                 <span className="text-xs font-semibold uppercase tracking-wide text-primary-foreground/70">{row.label}</span>
                 <span className={cn("font-display text-lg leading-tight", row.done ? "font-bold" : "text-base font-medium text-primary-foreground/70")}>{row.text}</span>

@@ -172,3 +172,13 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* A choice shows the instant it is made; the highlight only draws the eye, it never hides the content. */
+@keyframes pick-flash {
+  from { background-color: hsl(var(--sun) / 0.45); }
+  to { background-color: transparent; }
+}
+.pick-flash { animation: pick-flash 900ms ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  .pick-flash { animation: none; }
+}
