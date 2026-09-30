@@ -63,9 +63,8 @@ export function Layout() {
             <p>Three jobs a day at most. One van, one Dario.</p>
           </div>
           <div>
-            <p className="font-semibold text-foreground">This is a demo</p>
-            <p>The people and the business are fictional. No text is sent and no card is charged.</p>
-            <p className="mt-2">Built with <a className="font-semibold text-fern underline underline-offset-4" href="https://lovable.dev">Lovable</a> for the #lovablechallenge.</p>
+            <p>Built with <a className="font-semibold text-fern underline underline-offset-4" href="https://lovable.dev">Lovable</a> for the #lovablechallenge.</p>
+            <p className="mt-3 text-xs">A fictional business. No texts are sent and no card is charged.</p>
           </div>
         </div>
       </footer>
