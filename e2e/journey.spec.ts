@@ -818,3 +818,13 @@ test.describe("A booking that works first time, and shows its working", () => {
     expect(Date.now() - t0, "a full booking from the text box should take a few seconds of machine time").toBeLessThan(15_000);
   });
 });
+
+test("on a short window the reply is scrolled into view, so 'Get real times' visibly does something", async ({ page }) => {
+  await page.setViewportSize({ width: 1000, height: 600 });
+  await page.goto("/");
+  await page.getByLabel(/Ask the way you'd text/).fill("sellwood");
+  await page.getByRole("button", { name: "Get real times" }).click();
+  const reply = page.getByRole("status").filter({ hasText: "Fernhill replied instantly" });
+  await expect(reply).toBeVisible();
+  await expect.poll(async () => reply.evaluate((el) => { const r = el.getBoundingClientRect(); return r.top >= 0 && r.top < window.innerHeight * 0.7; }), { timeout: 5000 }).toBe(true);
+});

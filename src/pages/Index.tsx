@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowRight, CalendarCheck, CloudRain, MapPin, Play, Send, Sparkles, Truck, Umbrella } from "lucide-react";
 import { Van } from "@/components/Van";
@@ -24,6 +24,18 @@ export default function Index() {
   const [text, setText] = useState("");
   const [answer, setAnswer] = useState<Inquiry | null>(null);
   const { mood } = useWeatherMood();
+  const replyRef = useRef<HTMLDivElement>(null);
+
+  // The reply appears under the form, which on a short window (a phone, a preview pane) is off screen:
+  // bring it into view so a tap on "Get real times" visibly does something.
+  useEffect(() => {
+    const el = replyRef.current;
+    if (!answer || !el) return;
+    const r = el.getBoundingClientRect();
+    if (r.top < 64 || r.top > window.innerHeight * 0.6) {
+      el.scrollIntoView({ block: "start", behavior: "instant" });
+    }
+  }, [answer]);
 
   // Fetch the booking page while the visitor reads, so the first tap on it never shows a spinner.
   useEffect(() => {
@@ -94,7 +106,7 @@ export default function Index() {
             </p>
 
             {answer && parsed && (
-              <div className="mt-4 max-w-xl space-y-3 animate-rise-in" role="status" aria-live="polite">
+              <div ref={replyRef} className="mt-4 max-w-xl scroll-mt-20 space-y-3 animate-rise-in" role="status" aria-live="polite">
                 {(() => {
                   const chips = understood(parsed);
                   const ask = { message: answer.text, when: parsed.when };
