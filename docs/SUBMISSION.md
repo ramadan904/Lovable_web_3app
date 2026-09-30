@@ -75,7 +75,7 @@ Put this in the submission text: **open the app, then tap "Watch the 90-second s
 
 ## Before you post
 
-The share card (`public/og.png`) is picked up from the link's page. It uses the address in `VITE_SITE_URL`, which defaults to the GitHub Pages one. If your Lovable link is what you post, set `VITE_SITE_URL` to it in that project's build settings so the preview image and canonical link point there. Paste your link into the LinkedIn Post Inspector or an X draft first to see the card; both cache, so check before you publish.
+The share card (`public/og.png`) is picked up from the link's page. It uses the address in `VITE_SITE_URL`, which defaults to the Lovable one (fernhill-spotlight.lovable.app). If your Lovable link is what you post, set `VITE_SITE_URL` to it in that project's build settings so the preview image and canonical link point there. Paste your link into the LinkedIn Post Inspector or an X draft first to see the card; both cache, so check before you publish.
 
 ## Demo video: 2:40
 
