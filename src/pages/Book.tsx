@@ -314,7 +314,7 @@ export default function Book() {
           {step === 2 && q && zone && form.parking && (
             <div className="space-y-6">
               <SlotPicker
-                durationMin={q.durationMin} zone={zone} parking={form.parking} now={now} value={form.startMs} showDeals needsDry={needsDryDay(form.addons, form.parking)} dryDefault={!!init.ask} preferDate={init.ask?.wantDate ?? null}
+                durationMin={q.durationMin} zone={zone} parking={form.parking} now={now} value={form.startMs} showDeals needsDry={needsDryDay(form.addons, form.parking)} preferDate={init.ask?.wantDate ?? null}
                 onChange={(ms) => set("startMs", ms)}
                 whenEmpty={<WaitlistForm form={form} set={set} onSubmit={joinWaitlist} done={waitlisted} error={error} />}
               />

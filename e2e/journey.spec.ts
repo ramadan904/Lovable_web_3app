@@ -281,6 +281,8 @@ test.describe("Booking review and the rain promise", () => {
     await page.goto("/book?v=sedan&s=express&zip=97212&p=driveway");
     await page.getByLabel("Street address").fill("1 Rain St");
     await page.getByRole("button", { name: /Continue/ }).click();
+    // Wet days are blocked for an outdoor car by default; this customer chooses to see them anyway.
+    await page.getByRole("checkbox", { name: /Dry days only/ }).uncheck();
     // Find a day forecast wet (the tile is announced "Rain likely") that still has times.
     const wetDay = page.locator("fieldset button[aria-pressed]:not([disabled])").filter({ hasText: /Rain likely/ });
     test.skip((await wetDay.count()) === 0, "no rainy day with open times in this three-week window");
@@ -389,7 +391,8 @@ test("cancelling after rain has changed the booking is a full refund, even insid
   await page.goto("/book?v=sedan&s=express&zip=97212&p=driveway");
   await page.getByLabel("Street address").fill("1 Refund St");
   await page.getByRole("button", { name: /Continue/ }).click();
-  await dayButtons(page).nth(2).click();
+  // The nearest dry day: wet days are blocked for an outdoor car, and the storm below is forced onto this one.
+  await dayButtons(page).nth(0).click();
   await page.locator("fieldset button[aria-pressed]").filter({ hasText: TIME }).first().click();
   await page.getByRole("button", { name: /Continue/ }).click();
   await page.getByLabel("Your name").fill("Refund Rae");
@@ -542,7 +545,7 @@ test.describe("Natural language to a confirmed booking", () => {
     await page.getByRole("button", { name: /Continue/ }).click();
 
     // Only dry days are shown, with the slot they were offered already chosen or one tap away.
-    await expect(page.getByRole("checkbox", { name: /Show dry days only/ })).toBeChecked();
+    await expect(page.getByRole("checkbox", { name: /Dry days only/ })).toBeChecked();
     const rainy = page.locator("fieldset button[aria-pressed]:not([disabled])").filter({ hasText: /Rain likely/ });
     await expect(rainy).toHaveCount(0);
     // A neighbour-deal time also carries its discount ("2:00 PM −$10"), so match on the start of the label.
@@ -827,4 +830,38 @@ test("on a short window the reply is scrolled into view, so 'Get real times' vis
   const reply = page.getByRole("status").filter({ hasText: "Fernhill replied instantly" });
   await expect(reply).toBeVisible();
   await expect.poll(async () => reply.evaluate((el) => { const r = el.getBoundingClientRect(); return r.top >= 0 && r.top < window.innerHeight * 0.7; }), { timeout: 5000 }).toBe(true);
+});
+
+test.describe("The constraints hold, and the owner sees the result", () => {
+  test("for a car parked outdoors, wet days are blocked by default and can be shown on request", async ({ page }) => {
+    await page.goto("/book?v=sedan&s=express&zip=97212&p=driveway");
+    await page.getByLabel("Street address").fill("1 Rain Rd");
+    await page.getByRole("button", { name: /Continue/ }).click();
+    const box = page.getByRole("checkbox", { name: /Dry days only/ });
+    await expect(box).toBeChecked();
+    // No day you can pick is a wet one.
+    await expect(page.locator("fieldset button[aria-pressed]:not([disabled])").filter({ hasText: /Rain likely/ })).toHaveCount(0);
+    // A wet day is still on the calendar, greyed out and labelled.
+    await expect(page.locator("fieldset button[aria-pressed]:disabled").filter({ hasText: /^.*Rain/ }).first()).toBeVisible();
+    await box.uncheck();
+    await expect(page.locator("fieldset button[aria-pressed]:not([disabled])").filter({ hasText: /Rain likely/ }).first()).toBeVisible();
+  });
+
+  test("a garage never blocks on rain, so there is no dry-days switch", async ({ page }) => {
+    await page.goto("/book?v=sedan&s=express&zip=97212&p=garage");
+    await page.getByLabel("Street address").fill("1 Dry Rd");
+    await page.getByRole("button", { name: /Continue/ }).click();
+    await expect(page.getByRole("checkbox", { name: /Dry days only/ })).toHaveCount(0);
+  });
+
+  test("a new booking shows on the owner's page with its limits already applied", async ({ page }) => {
+    await bookThroughUi(page, "Owner Olive");
+    await page.goto("/owner");
+    const card = page.getByRole("region", { name: /Just booked/ });
+    await expect(card).toContainText("Owner Olive");
+    await expect(card).toContainText(/Job \d of 3 that day/);
+    await expect(card).toContainText(/min/);
+    await expect(card).toContainText("$25 deposit paid");
+    await expect(card).toContainText("Nothing to do");
+  });
 });

@@ -30,7 +30,7 @@ interface Props {
 }
 
 /** Real availability only: every time listed here passed the same rules the server enforces. */
-export function SlotPicker({ durationMin, zone, parking, now, value, onChange, excludeJobId, showDeals = false, needsDry = false, dryDefault = false, preferDate = null, whenEmpty }: Props) {
+export function SlotPicker({ durationMin, zone, parking, now, value, onChange, excludeJobId, showDeals = false, needsDry = false, dryDefault = true, preferDate = null, whenEmpty }: Props) {
   const state = useStore();
   const covered = isCovered(parking);
   const minute = Math.floor(now / 60_000);
@@ -94,7 +94,7 @@ export function SlotPicker({ durationMin, zone, parking, now, value, onChange, e
       {!covered && !needsDry && (
         <label className="flex cursor-pointer items-center gap-3 rounded-md border bg-card px-4 py-3 text-sm has-[:focus-visible]:outline has-[:focus-visible]:outline-[3px] has-[:focus-visible]:outline-sun">
           <input type="checkbox" checked={dryOnly} onChange={(e) => setDryOnly(e.target.checked)} className="size-4 accent-[hsl(var(--primary))]" />
-          <span><strong>Show dry days only.</strong> <span className="text-muted-foreground">Your car is outdoors, so we hide days forecast for heavy rain.</span></span>
+          <span><strong>Dry days only.</strong> <span className="text-muted-foreground">Your car is outdoors, so days forecast for heavy rain are blocked. Untick to see them anyway.</span></span>
         </label>
       )}
       <fieldset>

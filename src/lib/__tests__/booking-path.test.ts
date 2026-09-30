@@ -37,6 +37,10 @@ describe("every time the calendar offers can actually be booked", () => {
         const picks = [...new Set([day.slots[0], day.slots[Math.floor(day.slots.length / 2)], day.slots[day.slots.length - 1]])].filter(Boolean);
         for (const startMs of picks) {
           const go = () => createJob(state, input({ startMs, vehicle: { kind: vehicle, label: "Test" }, service, addons, zip: ZONE_ZIP[zone], parking: "garage" }), now);
+          const made = go();
+          // The $25 deposit is part of every booking: a slot is never held for free.
+          expect(made.job.depositCents, "deposit is required").toBeGreaterThan(0);
+          expect(made.job.depositState).toBe("held");
           expect(go, `${vehicle}/${service}/${zone}/${addons} at ${new Date(startMs).toISOString()}`).not.toThrow();
           booked++;
         }

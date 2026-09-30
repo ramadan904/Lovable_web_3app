@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { CheckCircle2, ChevronDown, Clock, MessageSquareText, Repeat, Route, Send, Timer, Wallet } from "lucide-react";
 import { DaySheet } from "@/components/owner/DaySheet";
+import { JustBooked } from "@/components/owner/JustBooked";
 import { NeedsYou } from "@/components/owner/NeedsYou";
 import { WaitlistCard } from "@/components/owner/WaitlistCard";
 import { WeatherMoves } from "@/components/owner/WeatherMoves";
@@ -89,6 +90,7 @@ export default function Owner() {
       </header>
 
       <NeedsYou state={state} />
+      <JustBooked state={state} now={now} />
 
       <section aria-labelledby="handled-h" className="mb-10">
         <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
