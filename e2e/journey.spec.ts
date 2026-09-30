@@ -1207,3 +1207,21 @@ test.describe("A correct zip always gets through", () => {
     await expect(page.getByRole("heading", { name: "When suits you?" })).toBeVisible();
   });
 });
+
+test("contact details filled in without the page noticing (autofill, a script) still book, and are saved", async ({ page }) => {
+  await page.goto("/book?v=suv&s=full&zip=97212&p=garage");
+  await page.getByLabel("Street address").fill("3999 NE Test St");
+  await page.getByRole("button", { name: /^Continue/ }).click();
+  await page.locator("fieldset button[aria-pressed]:not([disabled])").first().click();
+  await page.locator("fieldset button[aria-pressed]").filter({ hasText: /^\d{1,2}:\d{2} [AP]M/ }).first().click();
+  await page.getByRole("button", { name: /^Continue/ }).click();
+  await expect(page.getByRole("heading", { name: /Review and pay/ })).toBeVisible();
+  // Values set directly, with no events at all.
+  await page.evaluate(() => {
+    for (const [id, v] of [["name", "Autofill Ana"], ["phone", "503-555-0177"], ["email", "ana@example.com"]] as const) (document.getElementById(id) as HTMLInputElement).value = v;
+  });
+  await page.getByRole("button", { name: /^Book it/ }).click();
+  await expect(page.getByText("You're booked", { exact: true })).toBeVisible({ timeout: 10_000 });
+  const saved = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)!).jobs.find((j: { customer: { name: string } }) => j.customer.name === "Autofill Ana")?.customer, STORE_KEY);
+  expect(saved).toMatchObject({ name: "Autofill Ana", phone: "503-555-0177", email: "ana@example.com" });
+});

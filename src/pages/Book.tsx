@@ -210,6 +210,24 @@ export default function Book() {
     return { ready: ok, text: ok ? `Ready to book, ${form.name.trim().split(/\s+/)[0]}` : "Add your name, mobile number and email above", next: "" };
   })();
 
+  // Autofill or a script can put a value in a field without React hearing about it. Pull what is on screen into the form
+  // the moment the person touches anything (before any re-render could overwrite it), and again on submit.
+  const syncFromDom = () => {
+    const val = (id: string) => (document.getElementById(id) as HTMLInputElement | null)?.value;
+    const patch: Partial<Form> = {};
+    for (const k of ["name", "phone", "email"] as const) {
+      const v = val(k);
+      if (v !== undefined && v !== form[k]) patch[k] = v;
+    }
+    if (step === 1) {
+      const z = val("zip");
+      if (z !== undefined && zipOf(z) !== form.zip) { patch.zip = zipOf(z); patch.startMs = null; }
+      const a = val("address");
+      if (a !== undefined && a !== form.address) patch.address = a;
+    }
+    if (Object.keys(patch).length) setForm((f) => ({ ...f, ...patch }));
+  };
+
   const next = () => {
     let f = form;
     if (step === 1) {
@@ -231,7 +249,11 @@ export default function Book() {
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    const problems = contactProblems(form);
+    // Trust what is on screen: autofill or a script can fill a field without React hearing about it.
+    const onScreen = (id: string, fallback: string) => (document.getElementById(id) as HTMLInputElement | null)?.value ?? fallback;
+    const f = { ...form, name: onScreen("name", form.name), phone: onScreen("phone", form.phone), email: onScreen("email", form.email) };
+    if (f.name !== form.name || f.phone !== form.phone || f.email !== form.email) setForm(f);
+    const problems = contactProblems(f);
     if (problems.name || problems.phone || problems.email) {
       setTouched({ name: true, phone: true, email: true });
       setContactTried(true);
@@ -243,7 +265,7 @@ export default function Book() {
     window.setTimeout(() => {
       try {
         const job = actions.book({
-          customer: { name: form.name, phone: form.phone, email: form.email },
+          customer: { name: f.name.trim(), phone: f.phone.trim(), email: f.email.trim() },
           vehicle: { kind: form.vehicle!, label: form.label.trim() || VEHICLES[form.vehicle!].name.toLowerCase() },
           service: form.service!, addons: form.addons, zip: zip5, address: form.address, parking: form.parking!,
           access: { gateCode: form.gateCode, notes: form.notes }, startMs: form.startMs!, plan: form.plan,
@@ -303,7 +325,7 @@ export default function Book() {
       </ol>
 
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_22rem]">
-        <form onSubmit={step === 3 ? submit : (e) => { e.preventDefault(); next(); }} className="space-y-8" noValidate>
+        <form onSubmit={step === 3 ? submit : (e) => { e.preventDefault(); next(); }} onPointerDownCapture={syncFromDom} onFocusCapture={syncFromDom} onBlurCapture={syncFromDom} className="space-y-8" noValidate>
           <h2 ref={heading} tabIndex={-1} className="text-2xl font-bold focus:outline-none">
             {["What are we cleaning?", "Where do we find you?", "When suits you?", "Review and pay the deposit"][step]}
           </h2>
