@@ -369,7 +369,7 @@ export default function Book() {
               </fieldset>
 
               <div className="card space-y-3 p-5">
-                <h3 className="flex items-center gap-2 text-lg font-bold"><LockKeyhole className="size-4 text-fern" aria-hidden="true" /> Pay the {dollars(DEPOSIT_CENTS)} deposit</h3>
+                <h3 className="flex flex-wrap items-center gap-x-2 gap-y-1 text-lg font-bold"><LockKeyhole className="size-4 text-fern" aria-hidden="true" /> Pay the {dollars(DEPOSIT_CENTS)} deposit <span className="chip border-sun/50 bg-sun-soft text-xs text-sun-ink">Required to hold the slot</span></h3>
                 <p className="rounded-md bg-fern-soft px-3 py-2 font-semibold text-fern-ink">
                   {dollars(DEPOSIT_CENTS)} deposit holds the slot. Fully refundable if we have to move you for rain.
                 </p>
@@ -390,6 +390,7 @@ export default function Book() {
                   <li>No answer by three hours before? We release the slot to the waitlist and keep the deposit.</li>
                   <li>Rain on an outdoor job? We move you free, to a dry day you choose. If you'd rather not move, cancel for a full refund at any time.</li>
                 </ul>
+                <p className="text-sm font-semibold">No deposit, no slot: a time is only held once this is paid.</p>
                 <p className="text-xs text-muted-foreground">Demo build: no card is charged. In production this runs through Stripe, with Apple Pay and Google Pay.</p>
               </div>
             </div>

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { CloudRain, Umbrella } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MAX_JOBS_PER_DAY, ZONES, dollars, isCovered, type Parking, type ZoneKey } from "@/lib/business";
-import { activeJobs, neighbourDeal, slotsByDay } from "@/lib/engine";
+import { activeJobs, explainDay, neighbourDeal, slotsByDay, type TimeVerdict, type WhyNot } from "@/lib/engine";
 import { localDate, localMinutes, fmtDate, fmtDay, fmtTime } from "@/lib/time";
 import { useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -50,7 +50,9 @@ export function SlotPicker({ durationMin, zone, parking, now, value, onChange, e
   const dateOfValue = value ? days.find((d) => d.slots.includes(value))?.date : undefined;
   const [picked, setPicked] = useState<string | null>(dateOfValue ?? null);
   const wished = preferDate ? withSlots.find((d) => d.date === preferDate) : undefined;
-  const selected = days.find((d) => d.date === (picked ?? dateOfValue)) ?? wished ?? bestDry ?? withSlots[0];
+  // Open on a dry day with real choice (three or more times) rather than one with a single gap left.
+  const roomy = withSlots.find((d) => (covered || !d.forecast.wet) && d.slots.length >= 3);
+  const selected = days.find((d) => d.date === (picked ?? dateOfValue)) ?? wished ?? roomy ?? bestDry ?? withSlots[0];
 
   // The customer asked for a particular day and it has nothing open: say so, instead of silently showing another.
   const wishedDay = preferDate ? days.find((d) => d.date === preferDate) : undefined;
@@ -79,8 +81,12 @@ export function SlotPicker({ durationMin, zone, parking, now, value, onChange, e
     );
   }
 
-  const morning = selected?.slots.filter((ms) => localMinutes(ms) < 12 * 60) ?? [];
-  const afternoon = selected?.slots.filter((ms) => localMinutes(ms) >= 12 * 60) ?? [];
+  // Every time on the day, bookable or refused with its reason: the rules, made visible.
+  const verdicts: TimeVerdict[] = selected ? explainDay(state, durationMin, zone, selected.date, now, excludeJobId) : [];
+  const morning = verdicts.filter((v) => localMinutes(v.startMs) < 12 * 60);
+  const afternoon = verdicts.filter((v) => localMinutes(v.startMs) >= 12 * 60);
+  const WHY_LABEL: Record<WhyNot, string> = { booked: "Booked", drive: "Drive time", limit: `${MAX_JOBS_PER_DAY} of ${MAX_JOBS_PER_DAY}`, early: "Van loading" };
+  const reasonsShown = (Object.keys(WHY_LABEL) as WhyNot[]).map((w) => verdicts.find((v) => v.why === w)).filter((v): v is TimeVerdict => !!v);
   const wetPick = !!selected && selected.forecast.wet && !covered;
 
   return (
@@ -164,30 +170,57 @@ export function SlotPicker({ durationMin, zone, parking, now, value, onChange, e
               <strong>Neighbour deal.</strong> Dario is already in {ZONES[zone].name} this day. The times marked with a discount sit right next to that job, so he makes one trip instead of two. Every minute he doesn't drive is 50¢ off your bill.
             </p>
           )}
-          {[["Morning", morning], ["Afternoon", afternoon]].map(([label, slots]) =>
-            (slots as number[]).length ? (
+          {[["Morning", morning], ["Afternoon", afternoon]].map(([label, list]) =>
+            (list as TimeVerdict[]).length ? (
               <fieldset key={label as string}>
                 <legend className="eyebrow mb-2">{label as string}</legend>
                 <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5">
-                  {(slots as number[]).map((ms) => (
-                    <button
-                      key={ms}
-                      type="button"
-                      aria-pressed={value === ms}
-                      onClick={() => onChange(ms)}
-                      aria-label={dealOf(ms) ? `${fmtTime(ms)}, neighbour deal, ${dollars(dealOf(ms)!.discountCents)} off` : undefined}
-                      className={cn(
-                        "flex h-12 flex-col items-center justify-center rounded-md border bg-card text-[0.95rem] font-semibold leading-tight transition-colors",
-                        value === ms ? "border-primary bg-primary text-primary-foreground shadow-card" : "hover:border-foreground/60 hover:bg-muted",
-                      )}
-                    >
-                      {fmtTime(ms)}
-                      {dealOf(ms) && <span className={cn("text-[0.7rem] font-bold", value === ms ? "text-sun" : "text-fern")}>−{dollars(dealOf(ms)!.discountCents)}</span>}
-                    </button>
-                  ))}
+                  {(list as TimeVerdict[]).map((v) => {
+                    const ms = v.startMs;
+                    if (v.why) {
+                      return (
+                        <span
+                          key={ms}
+                          role="img"
+                          aria-label={`${fmtTime(ms)}, not available: ${WHY_LABEL[v.why]}. ${v.detail}`}
+                          title={v.detail ?? undefined}
+                          className="flex h-12 flex-col items-center justify-center rounded-md border border-dashed bg-transparent text-[0.95rem] font-medium leading-tight text-muted-foreground"
+                        >
+                          <span className="line-through decoration-muted-foreground/60" aria-hidden="true">{fmtTime(ms)}</span>
+                          <span className="text-[0.65rem] font-semibold uppercase tracking-wide" aria-hidden="true">{WHY_LABEL[v.why]}</span>
+                        </span>
+                      );
+                    }
+                    return (
+                      <button
+                        key={ms}
+                        type="button"
+                        aria-pressed={value === ms}
+                        onClick={() => onChange(ms)}
+                        aria-label={dealOf(ms) ? `${fmtTime(ms)}, neighbour deal, ${dollars(dealOf(ms)!.discountCents)} off` : undefined}
+                        className={cn(
+                          "flex h-12 flex-col items-center justify-center rounded-md border bg-card text-[0.95rem] font-semibold leading-tight transition-colors",
+                          value === ms ? "border-primary bg-primary text-primary-foreground shadow-card" : "hover:border-foreground/60 hover:bg-muted",
+                        )}
+                      >
+                        {fmtTime(ms)}
+                        {dealOf(ms) && <span className={cn("text-[0.7rem] font-bold", value === ms ? "text-sun" : "text-fern")}>−{dollars(dealOf(ms)!.discountCents)}</span>}
+                      </button>
+                    );
+                  })}
                 </div>
               </fieldset>
             ) : null,
+          )}
+          {reasonsShown.length > 0 && (
+            <div className="rounded-md border border-dashed p-3 text-sm text-foreground/85">
+              <p className="font-semibold">Why some times are crossed out</p>
+              <ul className="mt-1.5 space-y-1">
+                {reasonsShown.map((v) => (
+                  <li key={v.why!}><strong>{WHY_LABEL[v.why!]}:</strong> {v.detail}</li>
+                ))}
+              </ul>
+            </div>
           )}
           {value && selected.slots.includes(value) && (
             <p role="status" className={cn("flex flex-wrap items-center gap-2 rounded-md border px-3 py-2 text-sm font-semibold", selected.forecast.wet && !covered ? "border-rain/30 bg-rain-soft text-rain" : "border-fern/30 bg-fern-soft text-fern-ink")}>

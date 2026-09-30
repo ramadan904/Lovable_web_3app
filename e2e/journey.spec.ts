@@ -944,3 +944,55 @@ test.describe("A judge's booking: real clicks, nothing hidden, at any window siz
     });
   }
 });
+
+test.describe("The customer's own screens prove the rules", () => {
+  async function toWhen(page: Page, parking: "garage" | "driveway" = "garage") {
+    await page.goto(`/book?v=suv&s=full&zip=97212&p=${parking}`);
+    await page.getByLabel("Street address").fill("3999 NE Rule St");
+    await page.getByRole("button", { name: /^Continue/ }).click();
+    await expect(page.getByRole("heading", { name: "When suits you?" })).toBeVisible();
+  }
+
+  test("times that can't be booked are crossed out with the reason, and the legend explains each kind", async ({ page }) => {
+    await toWhen(page);
+    // Some day has other jobs on it: pick the busiest open day the calendar offers.
+    const days = page.locator("fieldset button[aria-pressed]:not([disabled])");
+    const count = await days.count();
+    let sawBooked = false, sawDrive = false;
+    for (let i = 0; i < Math.min(count, 8) && !(sawBooked && sawDrive); i++) {
+      await days.nth(i).click();
+      sawBooked ||= (await page.getByRole("img", { name: /not available: Booked/ }).count()) > 0;
+      sawDrive ||= (await page.getByRole("img", { name: /not available: Drive time/ }).count()) > 0;
+    }
+    expect(sawBooked, "a day shows a time refused because another job is there").toBe(true);
+    expect(sawDrive, "a day shows a time refused for drive time").toBe(true);
+    const blocked = page.getByRole("img", { name: /not available/ }).first();
+    await expect(blocked).toHaveAttribute("aria-label", /\d{1,2}:\d{2} [AP]M, not available: .+/);
+    await expect(page.getByText("Why some times are crossed out")).toBeVisible();
+    // A crossed-out time is not a button: it cannot be chosen.
+    expect(await page.locator("button[aria-pressed]").filter({ has: page.locator("span.line-through") }).count()).toBe(0);
+  });
+
+  test("a full day is marked as at its limit and cannot be picked", async ({ page }) => {
+    await toWhen(page);
+    await expect(page.getByText(/means Dario already has 3 jobs that day/)).toBeVisible();
+    const full = page.locator("fieldset button[aria-pressed]:disabled").filter({ hasText: /Full/ }).first();
+    await expect(full).toBeVisible();
+    await expect(full).toBeDisabled();
+  });
+
+  test("the deposit is required: the review says so, and pressing Enter without details books nothing", async ({ page }) => {
+    await toWhen(page);
+    await page.locator("fieldset button[aria-pressed]:not([disabled])").first().click();
+    await page.locator("fieldset button[aria-pressed]").filter({ hasText: /^\d{1,2}:\d{2} [AP]M/ }).first().click();
+    await page.getByRole("button", { name: /^Continue/ }).click();
+    await expect(page.getByText("Required to hold the slot")).toBeVisible();
+    await expect(page.getByText(/No deposit, no slot/)).toBeVisible();
+    await expect(page.getByText("$25 deposit holds the slot. Fully refundable if we have to move you for rain.")).toBeVisible();
+    // No way to skip it: submitting with no details does not book anything.
+    await page.getByLabel("Your name").press("Enter");
+    await expect(page.getByRole("alert")).toContainText(/name, a mobile number/);
+    await expect(page).toHaveURL(/\/book/);
+    expect(await page.evaluate((key) => JSON.parse(localStorage.getItem(key)!).jobs.filter((j: { customer: { name: string } }) => j.customer.name === "").length, STORE_KEY)).toBe(0);
+  });
+});

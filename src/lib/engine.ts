@@ -2,7 +2,7 @@
 // browser, in tests, and (unchanged) could run in an edge function.
 import {
   DAY_END_MIN, DAY_START_MIN, GRID_MIN, HOME_ZONE, HORIZON_DAYS, LOAD_MIN, MAX_JOBS_PER_DAY,
-  MIN_NOTICE_H, OPEN_WEEKDAYS, CURE_RAIN_LIMIT, RAIN_LIMIT, REFILL_MIN, isCovered, quote, rainLimitFor, travelMin,
+  MIN_NOTICE_H, OPEN_WEEKDAYS, CURE_RAIN_LIMIT, RAIN_LIMIT, REFILL_MIN, ZONES, isCovered, quote, rainLimitFor, travelMin,
   type AddonKey, type Parking, type ZoneKey,
 } from "./business";
 import { ACTIVE, type Job, type State, type WaitlistEntry } from "./model";
@@ -214,5 +214,56 @@ export function routeBlocks(jobs: Job[]): RouteBlock[] {
     prevEnd = start + j.durationMin;
   });
   if (sorted.length) out.push({ kind: "home", startMin: prevEnd, endMin: prevEnd + travelMin(prevZone, HOME_ZONE), index: sorted.length, from: prevZone, to: HOME_ZONE });
+  return out;
+}
+
+// Why a time is not on offer ------------------------------------------------------------------------
+export type WhyNot = "booked" | "drive" | "limit" | "early";
+export interface TimeVerdict {
+  startMs: number;
+  /** null: it can be booked. */
+  why: WhyNot | null;
+  /** One plain sentence saying what stops it. */
+  detail: string | null;
+}
+
+const clockLabel = (min: number) => `${((Math.floor(min / 60) + 11) % 12) + 1}:${String(min % 60).padStart(2, "0")} ${min < 720 ? "AM" : "PM"}`;
+
+/**
+ * Every start time on a day, each either bookable or refused with the reason. The refusals are the rules
+ * made visible: another job in the way, not enough time to drive between jobs, the three-job limit.
+ * (Times too close to now, or that could not finish before the day ends, are left out.)
+ */
+export function explainDay(state: State, durationMin: number, zone: ZoneKey, date: string, nowMs: number, excludeId?: string): TimeVerdict[] {
+  if (!OPEN_WEEKDAYS.includes(weekdayOf(date))) return [];
+  const others = placementsOn(state, date, excludeId).sort((a, b) => a.startMs - b.startMs);
+  const out: TimeVerdict[] = [];
+  for (let m = DAY_START_MIN; m + durationMin <= DAY_END_MIN; m += GRID_MIN) {
+    const startMs = atLocal(date, m);
+    const problem = validate(state, { startMs, durationMin, zone }, nowMs, excludeId);
+    if (problem === null) { out.push({ startMs, why: null, detail: null }); continue; }
+    if (problem === "too_soon" || problem === "too_far") continue;
+    const end = m + durationMin;
+    const overlap = others.find((p) => m < localMinutes(p.startMs) + p.durationMin && localMinutes(p.startMs) < end);
+    if (others.length >= MAX_JOBS_PER_DAY) {
+      out.push({ startMs, why: "limit", detail: `Dario already has ${MAX_JOBS_PER_DAY} jobs this day, his limit (one van, one water tank).` });
+    } else if (overlap) {
+      out.push({ startMs, why: "booked", detail: `Another job is on the road or at work then (${clockLabel(localMinutes(overlap.startMs))} to ${clockLabel(localMinutes(overlap.startMs) + overlap.durationMin)}).` });
+    } else if (problem === "too_early") {
+      out.push({ startMs, why: "early", detail: "Dario loads the van and drives here first, so he can't arrive this early." });
+    } else if (problem === "travel") {
+      const prev = [...others].reverse().find((p) => localMinutes(p.startMs) < m);
+      const next = others.find((p) => localMinutes(p.startMs) > m);
+      const prevEnd = prev ? localMinutes(prev.startMs) + prev.durationMin : 0;
+      const prevIndex = prev ? others.indexOf(prev) + 1 : 0;
+      const needed = prev ? prevEnd + travelMin(prev.zone, zone) + (prevIndex === 2 ? REFILL_MIN : 0) : 0;
+      out.push({
+        startMs, why: "drive",
+        detail: prev && m < needed
+          ? `Dario finishes his ${ZONES[prev.zone].name} job at ${clockLabel(prevEnd)}; the drive${prevIndex === 2 ? " and a water refill" : ""} means he can't be here before ${clockLabel(needed)}.`
+          : next ? `He couldn't finish and drive to his next job at ${clockLabel(localMinutes(next.startMs))}.` : "There isn't time to drive between jobs.",
+      });
+    }
+  }
   return out;
 }
