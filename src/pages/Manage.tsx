@@ -129,6 +129,31 @@ export default function Manage() {
               </div>
             </div>
 
+            <dl aria-label="Your booking at a glance" className="grid gap-2 text-sm sm:grid-cols-2">
+              <div className="rounded-md bg-primary-foreground/10 px-4 py-3">
+                <dt className="text-xs font-semibold uppercase tracking-wider text-primary-foreground/75">When</dt>
+                <dd className="font-semibold">{fmtDayLong(job.startMs)}, {fmtTime(job.startMs)} to about {fmtTime(end)}</dd>
+                <dd className="text-primary-foreground/80">{hoursLabel(job.durationMin)} on site</dd>
+              </div>
+              <div className="rounded-md bg-primary-foreground/10 px-4 py-3">
+                <dt className="text-xs font-semibold uppercase tracking-wider text-primary-foreground/75">Where</dt>
+                <dd className="font-semibold">{job.address}</dd>
+                <dd className="text-primary-foreground/80">{PARKING[job.parking].name}{job.access.gateCode ? `, gate ${job.access.gateCode}` : ""}{job.access.notes ? `. ${job.access.notes}` : ""}</dd>
+              </div>
+              <div className="rounded-md bg-primary-foreground/10 px-4 py-3">
+                <dt className="text-xs font-semibold uppercase tracking-wider text-primary-foreground/75">Deposit</dt>
+                <dd className="font-semibold">
+                  {job.depositCents === 0 ? "Care plan: no deposit" : <>{dollars(job.depositCents)} <span className="ml-1 rounded-full bg-sun px-2 py-0.5 text-xs font-bold text-sun-ink">Paid</span></>}
+                </dd>
+                <dd className="text-primary-foreground/80">{job.depositCents === 0 ? `${dollars(job.totalCents)} due after the job.` : `Visa \u2022\u2022\u2022\u2022 4242. Taken off your ${dollars(job.totalCents)} total, so ${dollars(Math.max(0, job.totalCents - job.depositCents))} is due after the job.`}</dd>
+              </div>
+              <div className="rounded-md bg-primary-foreground/10 px-4 py-3">
+                <dt className="text-xs font-semibold uppercase tracking-wider text-primary-foreground/75">Rain plan</dt>
+                <dd className="font-semibold">{isCovered(job.parking) ? "Covered: rain can't move you" : "We watch the forecast for you"}</dd>
+                <dd className="text-primary-foreground/80">{isCovered(job.parking) ? "Your spot is under cover, so weather never changes this appointment." : "If heavy rain is forecast 48 hours ahead, we offer dry times, free to move. Prefer not to move? Cancel for a full refund."}</dd>
+              </div>
+            </dl>
+
             <div className="flex flex-wrap gap-2">
               {CAN_DOWNLOAD ? (
                 <>

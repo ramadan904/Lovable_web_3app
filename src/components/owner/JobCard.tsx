@@ -1,4 +1,4 @@
-import { Ban, CloudRain, KeyRound, MapPin, NotebookText, Phone, Umbrella } from "lucide-react";
+import { Ban, CloudRain, CreditCard, KeyRound, MapPin, NotebookText, Phone, Umbrella } from "lucide-react";
 import { ADDONS, PARKING, SERVICES, ZONES, dollars, hoursLabel, isCovered } from "@/lib/business";
 import type { Job } from "@/lib/model";
 import { HOUR, fmtDay, fmtTime, localDate } from "@/lib/time";
@@ -53,6 +53,11 @@ export function JobCard({ job, stormDays, compact = false }: { job: Job; stormDa
             <dd><a className="font-semibold underline decoration-fern/30 underline-offset-4 hover:decoration-fern" href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${job.address}, Portland OR ${job.zip}`)}`} target="_blank" rel="noreferrer">{job.address}</a> <span className="text-muted-foreground">({ZONES[job.zone].name})</span></dd></div>
           <div className="flex items-start gap-2"><dt className="sr-only">Parking</dt>{covered ? <Umbrella className="mt-0.5 size-4 shrink-0 text-fern" aria-hidden="true" /> : <CloudRain className="mt-0.5 size-4 shrink-0 text-rain" aria-hidden="true" />}
             <dd>{PARKING[job.parking].name} <span className="text-muted-foreground">· {covered ? "not weather-sensitive" : "weather-sensitive, watched for you"}</span></dd></div>
+          <div className="flex items-start gap-2"><dt className="sr-only">Payment</dt><CreditCard className="mt-0.5 size-4 shrink-0 text-fern" aria-hidden="true" />
+            <dd>
+              {job.depositCents === 0 ? "Care plan: no deposit" : `${dollars(job.depositCents)} deposit ${job.depositState === "refunded" ? "refunded" : job.depositState === "kept" ? "kept" : "paid"}`}
+              <span className="text-muted-foreground"> · {dollars(Math.max(0, job.totalCents - job.depositCents))} due on the day{job.discountCents > 0 ? `, incl. ${dollars(job.discountCents)} neighbour deal` : ""}</span>
+            </dd></div>
           {job.access.gateCode && (
             <div className="flex items-start gap-2"><dt className="sr-only">Gate code</dt><KeyRound className="mt-0.5 size-4 shrink-0 text-sun-ink" aria-hidden="true" />
               <dd><span className="rounded bg-sun-soft px-2 py-0.5 font-mono text-[0.95rem] font-bold text-sun-ink">{job.access.gateCode}</span></dd></div>

@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { CloudRain, Umbrella } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ZONES, dollars, isCovered, type Parking, type ZoneKey } from "@/lib/business";
-import { neighbourDeal, slotsByDay } from "@/lib/engine";
-import { localMinutes, fmtDate, fmtTime } from "@/lib/time";
+import { MAX_JOBS_PER_DAY, ZONES, dollars, isCovered, type Parking, type ZoneKey } from "@/lib/business";
+import { activeJobs, neighbourDeal, slotsByDay } from "@/lib/engine";
+import { localDate, localMinutes, fmtDate, fmtDay, fmtTime } from "@/lib/time";
 import { useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
+import { DayFit } from "./DayFit";
 import { WeatherChip, WeatherIcon } from "./Weather";
 
 interface Props {
@@ -42,6 +43,7 @@ export function SlotPicker({ durationMin, zone, parking, now, value, onChange, e
     [state, durationMin, zone, minute, excludeJobId, needsDry, dryFilter],
   );
   const dealOf = (ms: number) => (showDeals ? neighbourDeal(state, { startMs: ms, durationMin, zone }, excludeJobId) : null);
+  const jobsOn = (date: string) => activeJobs(state).filter((j) => localDate(j.startMs) === date && j.id !== excludeJobId).length;
   const withSlots = days.filter((d) => d.slots.length);
   const bestDry = withSlots.find((d) => covered || !d.forecast.wet);
 
@@ -125,7 +127,7 @@ export function SlotPicker({ durationMin, zone, parking, now, value, onChange, e
                   <WeatherIcon f={d.forecast} className={cn("size-3.5", active && "!text-primary-foreground")} />
                   {d.forecast.rain}%
                 </span>
-                <span className="text-[0.7rem] font-medium opacity-80">{disabled ? (d.reason === "wet" ? (needsDry ? "Needs dry" : "Rain") : "Full") : `${d.slots.length} ${d.slots.length === 1 ? "time" : "times"}`}</span>
+                <span className="text-[0.7rem] font-medium opacity-80">{disabled ? (d.reason === "wet" ? (needsDry ? "Needs dry" : "Rain") : jobsOn(d.date) >= MAX_JOBS_PER_DAY ? `Full · ${MAX_JOBS_PER_DAY} of ${MAX_JOBS_PER_DAY}` : "Full") : `${d.slots.length} ${d.slots.length === 1 ? "time" : "times"}`}</span>
                 {!disabled && d.slots.some((ms) => dealOf(ms)) && (
                   <span className={cn("mt-0.5 rounded-full px-1.5 py-px text-[0.65rem] font-bold", active ? "bg-sun text-sun-ink" : "bg-sun-soft text-sun-ink")}>Deals</span>
                 )}
@@ -134,6 +136,9 @@ export function SlotPicker({ durationMin, zone, parking, now, value, onChange, e
             );
           })}
         </div>
+        <p className="mt-1 text-xs text-muted-foreground">
+          <strong>Full</strong> means Dario already has {MAX_JOBS_PER_DAY} jobs that day (his limit: one van, one water tank), or no gap is left once the drive between jobs is counted.
+        </p>
       </fieldset>
 
       {selected && (
@@ -184,6 +189,16 @@ export function SlotPicker({ durationMin, zone, parking, now, value, onChange, e
               </fieldset>
             ) : null,
           )}
+          {value && selected.slots.includes(value) && (
+            <p role="status" className={cn("flex flex-wrap items-center gap-2 rounded-md border px-3 py-2 text-sm font-semibold", selected.forecast.wet && !covered ? "border-rain/30 bg-rain-soft text-rain" : "border-fern/30 bg-fern-soft text-fern-ink")}>
+              <WeatherIcon f={selected.forecast} className="size-4" />
+              You picked {fmtDay(value)} at {fmtTime(value)}: {selected.forecast.rain}% chance of rain{covered ? ", and your car is covered, so rain can't touch it." : selected.forecast.wet ? ". We'll re-check 48 hours ahead and offer dry times if it holds." : ": a dry day."}
+            </p>
+          )}
+          <DayFit
+            jobs={activeJobs(state).filter((j) => localDate(j.startMs) === selected.date && j.id !== excludeJobId)}
+            candidate={value && selected.slots.includes(value) ? { startMs: value, durationMin, zone } : null}
+          />
           <p className="text-sm text-muted-foreground">
             Times are Portland time. Each time already includes Dario's drive from his previous job, so when it says 9:00, he's at your door at 9:00.
           </p>

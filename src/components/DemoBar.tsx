@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { Clock4, CloudLightning, Globe, Play, FastForward, Moon, RotateCcw, SunMedium, FlaskConical, UserX, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -8,8 +9,34 @@ import { useStory, storyStore } from "@/lib/story";
 import { setLiveWeather, useLiveStatus } from "@/lib/weather";
 import { HOUR, fmtDay, fmtDate, fmtStamp } from "@/lib/time";
 
+const FLAG = "fernhill:demo-controls";
+const readFlag = () => { try { return localStorage.getItem(FLAG) === "1"; } catch { return false; } };
+const writeFlag = (on: boolean) => { try { if (on) localStorage.setItem(FLAG, "1"); else localStorage.removeItem(FLAG); } catch { /* private mode */ } };
+
+/**
+ * The controls are backstage: customers never see them on the way to a booking. They show on the owner's
+ * page, and anywhere else once switched on with ?demo=1 (off with ?demo=0) or the Alt+D shortcut.
+ */
+function useDemoAccess(): boolean {
+  const { pathname, search } = useLocation();
+  const [flag, setFlag] = useState(readFlag);
+  useEffect(() => {
+    const q = new URLSearchParams(search).get("demo");
+    if (q === "1" || q === "0") { writeFlag(q === "1"); setFlag(q === "1"); }
+  }, [search]);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.altKey && !e.ctrlKey && !e.metaKey && e.key.toLowerCase() === "d") setFlag((on) => { writeFlag(!on); return !on; });
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+  return flag || pathname.startsWith("/owner");
+}
+
 /** The controls that make a week of a small business watchable in a minute. */
 export function DemoBar() {
+  const allowed = useDemoAccess();
   const [open, setOpen] = useState(false);
   const now = useNow();
   const state = useStore();
@@ -32,7 +59,7 @@ export function DemoBar() {
   };
 
   // The story has its own panel; keep the two out of each other's way.
-  if (story.active) return null;
+  if (story.active || !allowed) return null;
   if (!open) {
     return (
       <button

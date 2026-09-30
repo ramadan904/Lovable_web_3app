@@ -79,7 +79,7 @@ The share card (`public/og.png`) is picked up from the link's page. It uses the 
 
 ## Demo video: 2:40
 
-Record at 1440×900 (or a phone-width take for the mobile beat). Open **Demo controls** first, so viewers see where the storm button lives. Click **Reset** right before recording for a fresh week.
+Record at 1440×900 (or a phone-width take for the mobile beat). The Demo controls are backstage: they appear on the **Owner view** (`/owner`), and anywhere else with **Alt+D** or `?demo=1` (`?demo=0` hides them). Customers never see them on the way to a booking. Start on the Owner view, open **Demo controls**, and click **Reset** right before recording for a fresh week.
 
 | Time | Screen | Do | Say |
 |---|---|---|---|

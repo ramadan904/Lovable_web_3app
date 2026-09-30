@@ -9,14 +9,15 @@ import { Input, Textarea } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useNow } from "@/hooks/useNow";
 import {
-  ADDONS, DEPOSIT_CENTS, PARKING, PLAN_DISCOUNT, PLAN_WEEKS, SERVICES, VEHICLES, ZONES, ZONE_ZIP, dollars, hoursLabel, isCovered, needsDryDay, quote, zoneForZip,
+  ADDONS, CURE_RAIN_LIMIT, DEPOSIT_CENTS, PARKING, PLAN_DISCOUNT, PLAN_WEEKS, SERVICES, VEHICLES, ZONES, ZONE_ZIP, dollars, hoursLabel, isCovered, needsDryDay, quote, zoneForZip,
   type AddonKey, type Parking, type ServiceKey, type VehicleKind,
 } from "@/lib/business";
 import { parseInquiry, understood } from "@/lib/inquiry";
 import { BookingError } from "@/lib/model";
 import { neighbourDeal, validate } from "@/lib/engine";
 import { actions, getState, nowMs, useStore } from "@/lib/store";
-import { fmtDayLong, fmtTime } from "@/lib/time";
+import { fmtDayLong, fmtTime, localDate } from "@/lib/time";
+import { forecastFor } from "@/lib/weather";
 import { cn } from "@/lib/utils";
 
 const STEPS = ["Your car", "Where", "When", "Review & pay"] as const;
@@ -97,7 +98,9 @@ export default function Book() {
   const nav = useNavigate();
   const heading = useRef<HTMLHeadingElement>(null);
   // Changing the plan (car, service, place) can invalidate a chosen time, so it clears.
-  const PLAN_KEYS: (keyof Form)[] = ["vehicle", "service", "addons", "zip", "parking"];
+  // Changing these changes how long the job takes or where Dario drives, so a time chosen earlier no longer applies.
+  // Parking is not one of them: it only changes the rain rules, which are re-checked when the calendar opens.
+  const PLAN_KEYS: (keyof Form)[] = ["vehicle", "service", "addons", "zip"];
   const set = <K extends keyof Form>(k: K, v: Form[K]) => {
     setForm((f) => ({ ...f, [k]: v, ...(PLAN_KEYS.includes(k) ? { startMs: null } : {}) }));
     setError(null);
@@ -112,9 +115,10 @@ export default function Book() {
 
   // A time carried in from a link (or picked earlier) must still be open.
   useEffect(() => {
-    if (step === 2 && form.startMs && q && zone && validate(getState(), { startMs: form.startMs, durationMin: q.durationMin, zone }, nowMs()) !== null) {
-      setForm((f) => ({ ...f, startMs: null }));
-    }
+    if (step !== 2 || !form.startMs || !q || !zone) return;
+    const gone = validate(getState(), { startMs: form.startMs, durationMin: q.durationMin, zone }, nowMs()) !== null;
+    const tooWet = !!form.parking && needsDryDay(form.addons, form.parking) && forecastFor(localDate(form.startMs), getState().stormDays).rain >= CURE_RAIN_LIMIT;
+    if (gone || tooWet) setForm((f) => ({ ...f, startMs: null }));
   }, [step]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const next = () => {
@@ -376,7 +380,7 @@ export default function Book() {
                   <li>No answer by three hours before? We release the slot to the waitlist and keep the deposit.</li>
                   <li>Rain on an outdoor job? We move you free, to a dry day you choose. If you'd rather not move, cancel for a full refund at any time.</li>
                 </ul>
-                <p className="rounded-md bg-sun-soft px-3 py-2 text-sm font-medium text-sun-ink">Demo: in production the deposit runs through Stripe, and Apple Pay and Google Pay work the same way.</p>
+                <p className="text-xs text-muted-foreground">Demo build: no card is charged. In production this runs through Stripe, with Apple Pay and Google Pay.</p>
               </div>
             </div>
           )}

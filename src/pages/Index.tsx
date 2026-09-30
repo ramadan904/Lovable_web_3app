@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowRight, CalendarCheck, CloudRain, MapPin, Play, Send, Sparkles, Truck, Umbrella } from "lucide-react";
 import { Van } from "@/components/Van";
@@ -24,6 +24,12 @@ export default function Index() {
   const [text, setText] = useState("");
   const [answer, setAnswer] = useState<Inquiry | null>(null);
   const { mood } = useWeatherMood();
+
+  // Fetch the booking page while the visitor reads, so the first tap on it never shows a spinner.
+  useEffect(() => {
+    const t = window.setTimeout(() => { void import("./Book"); }, 600);
+    return () => window.clearTimeout(t);
+  }, []);
 
   const ask = (e: React.FormEvent) => {
     e.preventDefault();
@@ -59,17 +65,17 @@ export default function Index() {
             ))}
           </svg>
         )}
-        <div className="container grid items-center gap-10 py-12 md:py-16 lg:grid-cols-[1.1fr_0.9fr]">
+        <div className="container grid items-center gap-8 py-8 md:gap-10 md:py-16 lg:grid-cols-[1.1fr_0.9fr]">
           <div className="animate-rise-in">
-            <p className="chip border-primary/30 bg-card text-primary"><MapPin className="size-3.5" aria-hidden="true" /> {BUSINESS.city} · one van · about 150 rainy days a year</p>
+            <p className="chip hidden border-primary/30 bg-card text-primary sm:inline-flex"><MapPin className="size-3.5" aria-hidden="true" /> {BUSINESS.city} · one van · about 150 rainy days a year</p>
             <h1 className="mt-4 text-4xl font-extrabold leading-[1.05] sm:text-5xl lg:text-6xl">
               One man, one van, and a lot of rain. <span className="iris-text">Your car still gets clean.</span>
             </h1>
-            <p className="mt-5 max-w-xl text-lg text-foreground/85">
-              {BUSINESS.owner} runs Fernhill alone. He can't answer texts from under a dashboard, and he won't wash your car in a downpour. So Fernhill does the texting, the forecast-watching and the rescheduling for him. Ask below and get a real price, real times, and a rain plan, in seconds.
+            <p className="mt-4 max-w-xl text-lg text-foreground/85">
+              {BUSINESS.owner} can't answer texts from under a dashboard. So Fernhill answers for him: text it like you'd text him and get a real price, real dry times and a rain plan, in seconds.
             </p>
 
-            <form onSubmit={ask} className="iris-border mt-7 max-w-xl space-y-3 rounded-lg p-4 shadow-lift">
+            <form onSubmit={ask} className="iris-border mt-5 max-w-xl space-y-3 rounded-lg p-4 shadow-lift">
               <label htmlFor="ask" className="flex items-center gap-2 text-sm font-bold"><Sparkles className="size-4 text-sun-ink" aria-hidden="true" /> Ask the way you'd text a friend</label>
               <Textarea id="ask" rows={2} value={text} onChange={(e) => { setText(e.target.value); setAnswer(null); }} placeholder="My dog wrecked my Outback. I'm in Sellwood. Friday morning?" />
               <div className="flex flex-wrap items-center gap-2">
@@ -133,7 +139,7 @@ export default function Index() {
               </div>
               <div className="space-y-3 p-6">
                 <div className="flex items-center justify-between">
-                  <h2 className="font-display text-lg font-bold">Next dry openings</h2>
+                  <h2 className="flex items-center gap-2 font-display text-lg font-bold">Next dry openings <span className="chip border-fern/30 bg-fern-soft text-xs text-fern-ink"><span className="size-1.5 animate-pulse rounded-full bg-fern motion-reduce:animate-none" aria-hidden="true" /> Live</span></h2>
                   <span className="text-xs font-medium text-muted-foreground">Full Refresh · SUV · NE Portland</span>
                 </div>
                 {openNow.length ? (
@@ -141,7 +147,7 @@ export default function Index() {
                     {openNow.map((ms) => (
                       <li key={ms}>
                         <Link to={bookingLink({ vehicle: "suv", service: "full", zone: "NE", zip: "97212", startMs: ms })} className="flex items-center justify-between rounded-md border bg-background px-4 py-3 font-semibold hover:border-foreground/60">
-                          <span>{fmtDay(ms)} at {fmtTime(ms)}</span>
+                          <span>{fmtDay(ms)} at {fmtTime(ms)} <span className="ml-1 text-sm font-medium text-muted-foreground">{forecastFor(localDate(ms), state.stormDays).rain}% rain</span></span>
                           <ArrowRight className="size-4 text-fern" aria-hidden="true" />
                         </Link>
                       </li>

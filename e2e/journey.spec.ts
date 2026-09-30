@@ -37,6 +37,9 @@ async function bookThroughUi(page: Page, name = "Test Driver", dayIndex = 0) {
 async function demo(page: Page, name: RegExp) {
   const open = page.getByRole("button", { name: "Open demo controls" });
   const target = page.getByRole("button", { name });
+  // The controls are backstage: on the owner's page they are always there; elsewhere Alt+D brings them up.
+  await page.getByRole("banner").waitFor(); // the app has drawn (and is not mid-reload)
+  if (!page.url().includes("/owner") && !(await open.isVisible()) && !(await target.isVisible())) await page.keyboard.press("Alt+D");
   await open.or(target).first().waitFor();
   if (await open.isVisible()) await open.click();
   await target.click();
@@ -639,7 +642,9 @@ test.describe("The guided story", () => {
     await panel.getByRole("button", { name: /Try it yourself/ }).click();
     await expect(page).toHaveURL(/\/book/);
     await expect(panel).toHaveCount(0);
-    await expect(page.locator("html")).not.toHaveAttribute("data-weather", "rain"); // a fresh, dry week
+    // A fresh week: the forced storm is gone (the ordinary forecast for today may still be wet).
+    const storms = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)!).stormDays.length as number, STORE_KEY);
+    expect(storms).toBe(0);
     expect(errors).toEqual([]);
   });
 
@@ -653,7 +658,7 @@ test.describe("The guided story", () => {
     await expect(panel).toHaveCount(0);
   });
 
-  test("the panel fits a phone and the demo controls stay reachable after it closes", async ({ page }) => {
+  test("the panel fits a phone, and closing it leaves the owner's demo controls reachable", async ({ page }) => {
     await page.goto("/");
     await page.getByRole("button", { name: "Watch the 90-second story" }).click();
     const panel = page.getByRole("region", { name: "Guided story" });
@@ -661,9 +666,10 @@ test.describe("The guided story", () => {
     const vp = page.viewportSize()!;
     expect(box!.x).toBeGreaterThanOrEqual(0);
     expect(box!.x + box!.width).toBeLessThanOrEqual(vp.width);
-    await expect(page.getByRole("button", { name: "Open demo controls" })).toHaveCount(0); // not stacked on top of it
     await panel.getByRole("button", { name: "Close the story" }).click();
-    await expect(page.getByRole("button", { name: "Open demo controls" })).toBeVisible();
+    await expect(panel).toHaveCount(0);
+    await page.goto("/owner");
+    await expect(page.getByRole("button", { name: "Open demo controls" })).toBeVisible(); // backstage, where it belongs
   });
 });
 
@@ -677,7 +683,7 @@ test.describe("Resilience and the live forecast", () => {
 
   test("the live forecast can be switched on (real rain chances flow through) and off again", async ({ page }) => {
     await page.route("**/api.open-meteo.com/**", (route) => route.fulfill({ json: openMeteo(91) }));
-    await page.goto("/");
+    await page.goto("/?demo=1");
     const open = page.getByRole("button", { name: "Open demo controls" });
     if (await open.isVisible()) await open.click();
     await expect(page.getByText(/Off: a steady demo forecast/)).toBeVisible();
@@ -690,7 +696,7 @@ test.describe("Resilience and the live forecast", () => {
 
   test("if the forecast service is unreachable, the demo carries on and says why", async ({ page }) => {
     await page.route("**/api.open-meteo.com/**", (route) => route.abort());
-    await page.goto("/");
+    await page.goto("/?demo=1");
     const open = page.getByRole("button", { name: "Open demo controls" });
     if (await open.isVisible()) await open.click();
     await page.getByRole("button", { name: "Use the live Portland forecast" }).click();
@@ -716,5 +722,99 @@ test.describe("Resilience and the live forecast", () => {
     await expect(page.getByRole("heading", { name: "Bertha hit a pothole" })).toBeVisible();
     await page.getByRole("button", { name: "Start a fresh week" }).click();
     await expect(page.getByRole("heading", { name: "Handled for you this week" })).toBeVisible();
+  });
+});
+
+test.describe("The customer's path has no backstage chrome", () => {
+  const demoButton = (page: Page) => page.getByRole("button", { name: "Open demo controls" });
+
+  test("no demo controls on the way to a booking or on the confirmation; they live on the owner's page, or come up on request", async ({ page }) => {
+    for (const path of ["/", "/book"]) {
+      await page.goto(path);
+      await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+      await expect(demoButton(page)).toHaveCount(0);
+    }
+    await bookThroughUi(page, "Path Tester");
+    await expect(demoButton(page)).toHaveCount(0); // not even on the confirmation
+    await page.goto("/owner");
+    await expect(demoButton(page)).toBeVisible();
+
+    await page.goto("/");
+    await page.keyboard.press("Alt+D");
+    await expect(demoButton(page)).toBeVisible();
+    await page.keyboard.press("Alt+D");
+    await expect(demoButton(page)).toHaveCount(0);
+    await page.goto("/?demo=1");
+    await expect(demoButton(page)).toBeVisible();
+    await page.goto("/?demo=0");
+    await expect(demoButton(page)).toHaveCount(0);
+  });
+});
+
+test.describe("A booking that works first time, and shows its working", () => {
+  const ASK = "My dog wrecked my Outback. I'm in Sellwood. Friday morning?";
+
+  test("the text box is on screen without scrolling", async ({ page }) => {
+    await page.goto("/");
+    const box = await page.getByLabel(/Ask the way you'd text/).boundingBox();
+    const vp = page.viewportSize()!;
+    expect(box!.y + box!.height).toBeLessThanOrEqual(vp.height);
+  });
+
+  test("the time offered from the text box is still chosen after the address, and the day's working is on show", async ({ page }) => {
+    await page.goto("/");
+    await page.getByLabel(/Ask the way you'd text/).fill(ASK);
+    await page.getByRole("button", { name: "Get real times" }).click();
+    await page.getByRole("link", { name: /Continue to booking/ }).click();
+    await page.getByLabel("Street address").fill("1 Umatilla St");
+    await page.getByRole("radio", { name: /^Driveway/ }).check({ force: true });
+    await page.getByRole("button", { name: /Continue/ }).click();
+
+    // Their time survived choosing where the car is parked: it is highlighted, with its rain chance beside it.
+    const picked = page.locator("fieldset button[aria-pressed=true]").filter({ hasText: /^\d{1,2}:\d{2} [AP]M/ });
+    await expect(picked).toHaveCount(1);
+    await expect(page.getByText(/You picked .* at \d{1,2}:\d{2} [AP]M: \d+% chance of rain/)).toBeVisible();
+
+    // The limits are visible: how many jobs that day, the drive, and what "Full" means.
+    const fit = page.getByRole("figure", { name: "How this day fits together" });
+    await expect(fit).toContainText(/\d of 3 jobs already booked, so yours would be job \d/);
+    await expect(fit).toContainText(/drives \d+ min/);
+    await expect(page.getByText(/means Dario already has 3 jobs that day/)).toBeVisible();
+    const full = page.locator("fieldset button[aria-pressed]:disabled").filter({ hasText: /Full/ }).first();
+    await expect(full).toBeDisabled();
+
+    // Straight on to the review with nothing lost.
+    await page.getByRole("button", { name: /Continue/ }).click();
+    await expect(page.getByRole("heading", { name: "Review and pay the deposit" })).toBeVisible();
+  });
+
+  test("the confirmation reads like a final receipt, and the owner's cards show the deposit", async ({ page }) => {
+    await bookThroughUi(page, "Receipt Reader");
+    const glance = page.getByRole("list", { name: "Your booking at a glance" }).or(page.getByLabel("Your booking at a glance"));
+    await expect(glance).toContainText("3999 NE Test St");
+    await expect(glance).toContainText("Paid");
+    await expect(glance).toContainText(/\$25/);
+    await expect(glance).toContainText(/due after the job/);
+    await expect(glance).toContainText("Covered: rain can't move you");
+    await page.goto("/owner");
+    await expect(page.getByText(/\$25 deposit paid/).first()).toBeVisible();
+  });
+
+  test("the whole path, from the first sentence to a confirmation, is quick and never stalls", async ({ page }) => {
+    const t0 = Date.now();
+    await page.goto("/");
+    await page.getByLabel(/Ask the way you'd text/).fill(ASK);
+    await page.getByRole("button", { name: "Get real times" }).click();
+    await page.getByRole("link", { name: /Continue to booking/ }).click();
+    await page.getByLabel("Street address").fill("1 Umatilla St");
+    await page.getByRole("radio", { name: /^Garage/ }).check({ force: true });
+    await page.getByRole("button", { name: /Continue/ }).click();
+    await page.getByRole("button", { name: /Continue/ }).click(); // their time is already chosen
+    await page.getByLabel("Your name").fill("Quick Quinn");
+    await page.getByLabel("Mobile number").fill("(503) 555-0100");
+    await page.getByLabel("Email").fill("q@example.com");
+    await page.getByRole("button", { name: /Book it/ }).click();
+    await expectBooked(page);
+    expect(Date.now() - t0, "a full booking from the text box should take a few seconds of machine time").toBeLessThan(15_000);
   });
 });
