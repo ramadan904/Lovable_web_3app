@@ -108,6 +108,16 @@ export default function Book() {
 
   useEffect(() => { heading.current?.focus(); }, [step]);
 
+  // An error under a long form can be off screen: bring it into view so a stuck tap always explains itself.
+  const errorRef = useRef<HTMLParagraphElement>(null);
+  useEffect(() => {
+    if (!error) return;
+    const el = errorRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    if (r.top < 0 || r.bottom > window.innerHeight) el.scrollIntoView({ block: "center", behavior: "instant" });
+  }, [error]);
+
   const zone = form.zip.length >= 5 ? zoneForZip(form.zip) : null;
   const zipBad = form.zip.length >= 5 && !zone;
   const q = form.vehicle && form.service ? quote(form.vehicle, form.service, form.addons, zone) : null;
@@ -385,15 +395,17 @@ export default function Book() {
             </div>
           )}
 
-          {error && step !== 2 && <p role="alert" className="rounded-md border border-danger/30 bg-danger-soft px-4 py-3 text-sm font-semibold text-danger">{error}</p>}
-          {error && step === 2 && !joining && <p role="alert" className="rounded-md border border-danger/30 bg-danger-soft px-4 py-3 text-sm font-semibold text-danger">{error}</p>}
+          {error && step !== 2 && <p ref={errorRef} role="alert" className="rounded-md border border-danger/30 bg-danger-soft px-4 py-3 text-sm font-semibold text-danger">{error}</p>}
+          {error && step === 2 && !joining && <p ref={errorRef} role="alert" className="rounded-md border border-danger/30 bg-danger-soft px-4 py-3 text-sm font-semibold text-danger">{error}</p>}
 
-          <div className="flex items-center justify-between gap-3 border-t pt-6">
+          <div className="sticky bottom-0 z-20 flex items-center justify-between gap-3 border-t bg-background/95 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/85">
             {step > 0 ? <Button type="button" variant="ghost" onClick={() => { setError(null); setStep(step - 1); }}><ArrowLeft /> Back</Button> : <Button asChild variant="ghost"><Link to="/"><ArrowLeft /> Home</Link></Button>}
             {step < 3 ? (
-              <Button type="submit" size="lg">Continue <ArrowRight /></Button>
+              <Button type="submit" size="lg" className="flex-1 sm:flex-none">Continue <ArrowRight /></Button>
             ) : (
-              <Button type="submit" size="lg" variant="sun" disabled={busy}>{busy ? <><Loader2 className="animate-spin" aria-hidden="true" /> Holding your slot…</> : <><LockKeyhole aria-hidden="true" /> {`Book it · pay ${dollars(DEPOSIT_CENTS)} deposit`}</>}</Button>
+              <Button type="submit" size="lg" variant="sun" disabled={busy} aria-label={busy ? "Holding your slot" : `Book it · pay ${dollars(DEPOSIT_CENTS)} deposit`} className="min-w-0 flex-1 sm:flex-none">
+                {busy ? <><Loader2 className="animate-spin" aria-hidden="true" /> Holding your slot…</> : <><LockKeyhole aria-hidden="true" /> <span className="sm:hidden" aria-hidden="true">{`Pay ${dollars(DEPOSIT_CENTS)} & book`}</span><span className="hidden sm:inline" aria-hidden="true">{`Book it · pay ${dollars(DEPOSIT_CENTS)} deposit`}</span></>}
+              </Button>
             )}
           </div>
         </form>

@@ -10,13 +10,13 @@ const dayButtons = (page: Page) => page.locator("fieldset button[aria-pressed]:n
 
 async function bookThroughUi(page: Page, name = "Test Driver", dayIndex = 0) {
   await page.goto("/book");
-  await page.getByRole("radio", { name: /SUV or wagon/ }).check({ force: true });
-  await page.getByRole("radio", { name: /Full Refresh/ }).check({ force: true });
+  await page.getByRole("radio", { name: /SUV or wagon/ }).locator("xpath=ancestor::label").click();
+  await page.getByRole("radio", { name: /Full Refresh/ }).locator("xpath=ancestor::label").click();
   await page.getByRole("button", { name: /Continue/ }).click();
 
   await page.getByLabel("Zip code").fill("97212");
   await page.getByLabel("Street address").fill("3999 NE Test St");
-  await page.getByRole("radio", { name: /^Garage/ }).check({ force: true });
+  await page.getByRole("radio", { name: /^Garage/ }).locator("xpath=ancestor::label").click();
   await page.getByRole("button", { name: /Continue/ }).click();
 
   // Real availability: pick the first open time on the chosen day.
@@ -479,7 +479,7 @@ test.describe("Care plans", () => {
     await dayButtons(page).nth(1).click();
     await page.locator("fieldset button[aria-pressed]").filter({ hasText: TIME }).first().click();
     await page.getByRole("button", { name: /Continue/ }).click();
-    await page.getByRole("radio", { name: /Every 6 weeks/ }).check({ force: true });
+    await page.getByRole("radio", { name: /Every 6 weeks/ }).locator("xpath=ancestor::label").click();
     const review = page.getByRole("region", { name: "Review your booking" });
     await expect(review.getByText("Care plan", { exact: true })).toBeVisible();
     await expect(review).toContainText(/Every 6 weeks/);
@@ -541,7 +541,7 @@ test.describe("Natural language to a confirmed booking", () => {
     await expect(page.getByLabel("Zip code")).toHaveValue("97202");
     await expect(page.getByText(/We used .*97202.* for Sellwood/)).toBeVisible();
     await page.getByLabel("Street address").fill("1 Umatilla St");
-    await page.getByRole("radio", { name: /^Driveway/ }).check({ force: true });
+    await page.getByRole("radio", { name: /^Driveway/ }).locator("xpath=ancestor::label").click();
     await page.getByRole("button", { name: /Continue/ }).click();
 
     // Only dry days are shown, with the slot they were offered already chosen or one tap away.
@@ -770,7 +770,7 @@ test.describe("A booking that works first time, and shows its working", () => {
     await page.getByRole("button", { name: "Get real times" }).click();
     await page.getByRole("link", { name: /Continue to booking/ }).click();
     await page.getByLabel("Street address").fill("1 Umatilla St");
-    await page.getByRole("radio", { name: /^Driveway/ }).check({ force: true });
+    await page.getByRole("radio", { name: /^Driveway/ }).locator("xpath=ancestor::label").click();
     await page.getByRole("button", { name: /Continue/ }).click();
 
     // Their time survived choosing where the car is parked: it is highlighted, with its rain chance beside it.
@@ -810,7 +810,7 @@ test.describe("A booking that works first time, and shows its working", () => {
     await page.getByRole("button", { name: "Get real times" }).click();
     await page.getByRole("link", { name: /Continue to booking/ }).click();
     await page.getByLabel("Street address").fill("1 Umatilla St");
-    await page.getByRole("radio", { name: /^Garage/ }).check({ force: true });
+    await page.getByRole("radio", { name: /^Garage/ }).locator("xpath=ancestor::label").click();
     await page.getByRole("button", { name: /Continue/ }).click();
     await page.getByRole("button", { name: /Continue/ }).click(); // their time is already chosen
     await page.getByLabel("Your name").fill("Quick Quinn");
@@ -864,4 +864,83 @@ test.describe("The constraints hold, and the owner sees the result", () => {
     await expect(card).toContainText("$25 deposit paid");
     await expect(card).toContainText("Nothing to do");
   });
+});
+
+test.describe("A judge's booking: real clicks, nothing hidden, at any window size", () => {
+  const sizes = [
+    { name: "a short preview pane", width: 900, height: 560 },
+    { name: "a small phone", width: 360, height: 640 },
+    { name: "this device", width: 0, height: 0 },
+  ];
+  for (const size of sizes) {
+    test(`car and service, where, when, deposit, confirmation on ${size.name}`, async ({ page }) => {
+      if (size.width) await page.setViewportSize({ width: size.width, height: size.height });
+      const vp = page.viewportSize()!;
+      const errors: string[] = [];
+      page.on("pageerror", (e) => errors.push(e.message));
+      const primary = () => page.getByRole("button", { name: /^(Continue|Book it)/ });
+      /** The next step is always on screen, inside the window, without scrolling. */
+      const nextIsOnScreen = async (label: string) => {
+        const box = await primary().boundingBox();
+        expect(box, `${label}: button exists`).not.toBeNull();
+        expect(box!.y, `${label}: top on screen`).toBeGreaterThanOrEqual(0);
+        expect(box!.y + box!.height, `${label}: bottom on screen`).toBeLessThanOrEqual(vp.height + 1);
+        expect(box!.x, `${label}: left on screen`).toBeGreaterThanOrEqual(0);
+        expect(box!.x + box!.width, `${label}: right on screen`).toBeLessThanOrEqual(vp.width + 1);
+      };
+
+      await page.goto("/book");
+      // Empty tap: the reason is shown, on screen.
+      await primary().click();
+      const alert = page.getByRole("alert");
+      await expect(alert).toContainText("Pick what you drive");
+      const ab = await alert.boundingBox();
+      expect(ab!.y).toBeGreaterThanOrEqual(0);
+      expect(ab!.y + ab!.height).toBeLessThanOrEqual(vp.height + 1);
+
+      // 1. Car and service, by clicking what's drawn (no forced clicks).
+      await page.getByText("SUV or wagon", { exact: true }).click();
+      await page.getByText("Full Refresh", { exact: true }).first().click();
+      await nextIsOnScreen("car and service");
+      await primary().click();
+
+      // 2. Where.
+      await page.getByLabel("Zip code").fill("97212");
+      await page.getByLabel("Street address").fill("3999 NE Test St");
+      await page.getByText("Driveway", { exact: true }).click();
+      await nextIsOnScreen("where");
+      await primary().click();
+
+      // 3. When: rain and drive time on show, wet days blocked, a time chosen.
+      await expect(page.getByRole("heading", { name: "When suits you?" })).toBeVisible();
+      await page.locator("fieldset button[aria-pressed]:not([disabled])").first().click();
+      const time = page.locator("fieldset button[aria-pressed]").filter({ hasText: /^\d{1,2}:\d{2} [AP]M/ }).first();
+      await time.scrollIntoViewIfNeeded();
+      await time.click();
+      await expect(page.getByText(/You picked .* \d+% chance of rain/)).toBeVisible();
+      await expect(page.getByRole("figure", { name: "How this day fits together" })).toContainText(/of 3 jobs already booked/);
+      await nextIsOnScreen("when");
+      await primary().click();
+
+      // 4. Review and pay the deposit.
+      await expect(page.getByRole("heading", { name: /Review and pay/ })).toBeVisible();
+      await expect(page.getByText("$25 deposit holds the slot. Fully refundable if we have to move you for rain.")).toBeVisible();
+      await page.getByLabel("Your name").fill("Judge Jones");
+      await page.getByLabel("Mobile number").fill("(503) 555-0100");
+      await page.getByLabel("Email").fill("judge@example.com");
+      await nextIsOnScreen("pay");
+      await primary().click();
+
+      // Confirmation: final, specific, not a generic screen.
+      await expect(page.getByText("You're booked", { exact: true })).toBeVisible({ timeout: 10_000 });
+      const glance = page.getByLabel("Your booking at a glance");
+      await expect(glance).toContainText("3999 NE Test St");
+      await expect(glance).toContainText("Paid");
+      await expect(glance).toContainText(/\$25/);
+      await expect(glance).toContainText(/Rain plan/i);
+      await expect(page.getByText(/FH-[A-Z0-9]{4}/).first()).toBeVisible();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), "no sideways scroll").toBe(false);
+      expect(errors).toEqual([]);
+    });
+  }
 });

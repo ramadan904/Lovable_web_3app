@@ -28,13 +28,13 @@ test("landing with an answered inquiry", async ({ page }) => {
 test("booking: every step", async ({ page }) => {
   await page.goto("/book");
   await audit(page);
-  await page.getByRole("radio", { name: /Car/ }).first().check({ force: true });
-  await page.getByRole("radio", { name: /Express Wash/ }).check({ force: true });
+  await page.getByRole("radio", { name: /Car/ }).first().locator("xpath=ancestor::label").click();
+  await page.getByRole("radio", { name: /Express Wash/ }).locator("xpath=ancestor::label").click();
   await page.getByRole("button", { name: /Continue/ }).click();
   await audit(page);
   await page.getByLabel("Zip code").fill("97212");
   await page.getByLabel("Street address").fill("1 Main");
-  await page.getByRole("radio", { name: /^Driveway/ }).check({ force: true });
+  await page.getByRole("radio", { name: /^Driveway/ }).locator("xpath=ancestor::label").click();
   await page.getByRole("button", { name: /Continue/ }).click();
   await audit(page);
   await page.locator("fieldset button[aria-pressed]").filter({ hasText: /^\d{1,2}:\d{2} [AP]M$/ }).first().click();
