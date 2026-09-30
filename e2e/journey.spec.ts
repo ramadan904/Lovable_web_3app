@@ -1266,3 +1266,134 @@ test.describe("A choice shows the instant it is made", () => {
     await expect(page.getByRole("complementary", { name: "Your booking" })).not.toContainText("Interior Reset");
   });
 });
+
+test.describe("The browser's Back and Forward walk the booking steps", () => {
+  const cont = (page: Page) => page.getByRole("button", { name: /^Continue/ });
+  const heading = (page: Page, name: string) => expect(page.getByRole("heading", { name })).toBeVisible();
+
+  test("Back goes to the previous step with everything still chosen, and Forward returns", async ({ page }) => {
+    await page.goto("/");
+    await page.getByRole("link", { name: /Book a detail/ }).first().click();
+    await page.getByText("SUV or wagon", { exact: true }).click();
+    await page.getByText("Full Refresh", { exact: true }).first().click();
+    await cont(page).click();
+    await heading(page, "Where do we find you?");
+    await page.getByLabel("Zip code").fill("97212");
+    await page.getByLabel("Street address").fill("3999 NE Back St");
+    await page.getByText("Garage", { exact: true }).click();
+    await cont(page).click();
+    await heading(page, "When suits you?");
+
+    // Back to "Where": what was typed is still there.
+    await page.goBack();
+    await heading(page, "Where do we find you?");
+    await expect(page.getByLabel("Street address")).toHaveValue("3999 NE Back St");
+    await expect(page.getByLabel("Zip code")).toHaveValue("97212");
+
+    // Back again to the car and service: still selected, sidebar still shows them.
+    await page.goBack();
+    await heading(page, "What are we cleaning?");
+    await expect(page.getByRole("radio", { name: /SUV or wagon/ })).toBeChecked();
+    await expect(page.getByRole("radio", { name: /Full Refresh/ })).toBeChecked();
+    await expect(page.getByRole("complementary", { name: "Your booking" })).toContainText("Full Refresh");
+
+    // Forward twice returns to the calendar.
+    await page.goForward();
+    await heading(page, "Where do we find you?");
+    await page.goForward();
+    await heading(page, "When suits you?");
+
+    // One more Back from the very first step leaves the booking: to the page we came from.
+    await page.goBack(); await page.goBack();
+    await page.goBack();
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("One man, one van");
+  });
+
+  test("the progress bar and the on-page Back button stay in step with the browser", async ({ page }) => {
+    await page.goto("/book?v=suv&s=full&zip=97212&p=garage");
+    await page.getByLabel("Street address").fill("3999 NE Bar St");
+    await cont(page).click();
+    await heading(page, "When suits you?");
+    await page.getByRole("button", { name: "1. Your car" }).click();
+    await heading(page, "What are we cleaning?");
+    await page.goBack();
+    await heading(page, "When suits you?");
+    await page.getByRole("button", { name: "Back", exact: true }).click();
+    await heading(page, "Where do we find you?");
+    await expect(page.getByLabel("Street address")).toHaveValue("3999 NE Bar St");
+  });
+
+  test("after booking, Back never shows a blank or broken page, and Forward returns to the confirmation", async ({ page }) => {
+    await bookThroughUi(page, "History Hal");
+    const confirmation = page.url();
+    await page.goBack();
+    await expect(page.getByRole("heading", { level: 2 }).first()).toBeVisible(); // something real is on screen
+    await expect(page.getByText("Something went wrong")).toHaveCount(0);
+    await page.goForward();
+    expect(page.url()).toBe(confirmation);
+    await expect(page.getByText("You're booked", { exact: true })).toBeVisible();
+  });
+
+  test("a step the form can't support is never shown: a stale entry falls back to the nearest valid one", async ({ page }) => {
+    await page.goto("/book?v=suv&s=full&zip=97212&p=garage");
+    await page.getByLabel("Street address").fill("3999 NE Stale St");
+    await cont(page).click();
+    await heading(page, "When suits you?");
+    // Reload loses the form (it is in memory), but the history entry still says step 2.
+    await page.reload();
+    await expect(page.getByRole("heading", { level: 2 }).first()).toBeVisible();
+    await expect(page.getByRole("heading", { name: "When suits you?" })).toHaveCount(0); // no calendar without an address
+  });
+});
+
+test.describe("Fast and keyboard-only hands", () => {
+  const toReview = async (page: Page) => {
+    await page.goto("/book?v=suv&s=full&zip=97212&p=garage");
+    await page.getByLabel("Street address").fill("3999 NE Fast St");
+    await page.getByRole("button", { name: /^Continue/ }).click();
+    await page.locator("fieldset button[aria-pressed]:not([disabled])").first().click();
+    await page.locator("fieldset button[aria-pressed]").filter({ hasText: /^\d{1,2}:\d{2} [AP]M/ }).first().click();
+    await page.getByRole("button", { name: /^Continue/ }).click();
+    await expect(page.getByRole("heading", { name: /Review and pay/ })).toBeVisible();
+  };
+
+  test("a double-click (or a double tap) on Pay makes exactly one booking", async ({ page }) => {
+    await toReview(page);
+    await page.getByRole("button", { name: /Fill in sample details/ }).click();
+    const before = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)!).jobs.length as number, STORE_KEY);
+    await page.getByRole("button", { name: /^Book it/ }).dblclick();
+    await expect(page.getByText("You're booked", { exact: true })).toBeVisible({ timeout: 10_000 });
+    const after = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)!).jobs.filter((j: { customer: { name: string } }) => j.customer.name === "Alex Rivera").length as number, STORE_KEY);
+    expect(after).toBe(1);
+    void before;
+  });
+
+  test("Enter in a field moves on, exactly like the button: address to calendar, and the last field books", async ({ page }) => {
+    await page.goto("/book?v=suv&s=full&zip=97212&p=garage");
+    await page.getByLabel("Street address").fill("3999 NE Enter St");
+    await page.getByLabel("Street address").press("Enter");
+    await expect(page.getByRole("heading", { name: "When suits you?" })).toBeVisible();
+    await page.locator("fieldset button[aria-pressed]:not([disabled])").first().click();
+    await page.locator("fieldset button[aria-pressed]").filter({ hasText: /^\d{1,2}:\d{2} [AP]M/ }).first().click();
+    await page.getByRole("button", { name: /^Continue/ }).click();
+    await page.getByLabel("Your name").fill("Enter Eli");
+    await page.getByLabel("Mobile number").fill("(503) 555-0111");
+    await page.getByLabel("Email").fill("eli@example.com");
+    await page.getByLabel("Email").press("Enter");
+    await expect(page.getByText("You're booked", { exact: true })).toBeVisible({ timeout: 10_000 });
+  });
+
+  test("the car and service can be chosen with the keyboard alone", async ({ page }) => {
+    await page.goto("/book");
+    await expect(page.getByRole("heading", { name: "What are we cleaning?" })).toBeVisible();
+    await page.getByRole("radio", { name: /SUV or wagon/ }).focus();
+    await page.keyboard.press("Space");
+    await page.getByRole("radio", { name: /Full Refresh/ }).focus();
+    await page.keyboard.press("Space");
+    await expect(page.getByRole("radio", { name: /SUV or wagon/ })).toBeChecked();
+    await expect(page.getByRole("radio", { name: /Full Refresh/ })).toBeChecked();
+    await page.getByRole("button", { name: /^Continue/ }).focus();
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("heading", { name: "Where do we find you?" })).toBeVisible();
+  });
+});

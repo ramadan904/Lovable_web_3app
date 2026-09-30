@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeft, ArrowRight, Check, Clock, CloudRain, CreditCard, Loader2, LockKeyhole, MapPin, Sparkles, Umbrella } from "lucide-react";
 import { toast } from "sonner";
 import { SlotPicker } from "@/components/SlotPicker";
@@ -112,6 +112,15 @@ function stepProblem(step: number, f: { vehicle: unknown; service: unknown; zip:
   return null;
 }
 
+/** The furthest step this form can legitimately be on, so a stale history entry can never land on a blank or broken step. */
+function clampStep(n: number, f: { vehicle: unknown; service: unknown; zip: string; address: string; parking: unknown; startMs: number | null }): number {
+  let s = n;
+  if (s >= 1 && (!f.vehicle || !f.service)) s = 0;
+  if (s >= 2 && !(zoneForZip(zipOf(f.zip)) && f.address.trim() && f.parking)) s = Math.min(s, 1);
+  if (s >= 3 && !f.startMs) s = Math.min(s, 2);
+  return s;
+}
+
 /** One of the three contact fields: numbered, marked required, with a live tick and its own specific error. */
 function ContactField({ n, id, label, hint, error, valid, children }: { n: number; id: string; label: string; hint: string; error: string | null; valid: boolean; children: React.ReactNode }) {
   return (
@@ -143,6 +152,19 @@ export default function Book() {
   const askParsed = useMemo(() => (init.ask ? parseInquiry(init.ask.message, nowMs()) : null), [init.ask]);
   const now = useNow();
   const nav = useNavigate();
+  const location = useLocation();
+  /** Move to a step AND record it in the browser's history, so Back and Forward (and a phone's back gesture) walk the steps. */
+  const goStep = (n: number) => {
+    setStep(n);
+    nav({ pathname: location.pathname, search: location.search }, { state: { bookStep: n } });
+  };
+  useEffect(() => {
+    // Back or Forward landed on another entry: show the step it recorded, as far as the form allows.
+    const target = (location.state as { bookStep?: number } | null)?.bookStep ?? init.step;
+    setStep((cur) => { const next = clampStep(target, form); return next === cur ? cur : next; });
+    setError(null);
+    setAttempted(null);
+  }, [location.key]); // eslint-disable-line react-hooks/exhaustive-deps
   const heading = useRef<HTMLHeadingElement>(null);
   // The message for a step that couldn't advance is worked out from the form as it is NOW, so the moment the
   // problem is fixed the message is gone: it can never be left over from an earlier attempt.
@@ -244,7 +266,7 @@ export default function Book() {
     setError(null);
     if (stepProblem(step, f)) { setAttempted(step); return; }
     setAttempted(null);
-    setStep(step + 1);
+    goStep(step + 1);
   };
 
   const submit = (e: React.FormEvent) => {
@@ -275,7 +297,7 @@ export default function Book() {
         setBusy(false);
         if (err instanceof BookingError && (err.code === "slot_taken" || err.code === "too_soon")) {
           set("startMs", null);
-          setStep(2);
+          goStep(2);
           toast.error("That time was just taken", { description: "Someone booked it while you were typing. Here's what's open now." });
         } else if (err instanceof BookingError) {
           setError(err.message);
@@ -314,7 +336,7 @@ export default function Book() {
             <button
               type="button"
               disabled={i > step}
-              onClick={() => setStep(i)}
+              onClick={() => goStep(i)}
               className={cn("flex w-full flex-col gap-1.5 text-left disabled:cursor-default", i > step && "opacity-60")}
             >
               <span className={cn("h-1.5 rounded-full transition-colors", i < step ? "bg-primary" : i === step ? "bg-sun" : "bg-border")} />
@@ -494,7 +516,7 @@ export default function Book() {
                 </button>
               </section>
 
-              <ReviewCard form={form} q={q} zone={zone} onChangeTime={() => setStep(2)} />
+              <ReviewCard form={form} q={q} zone={zone} onChangeTime={() => goStep(2)} />
               <WeatherStatus
                 parking={form.parking} startMs={form.startMs} durationMin={q.durationMin} zone={zone}
                 onPick={(ms) => { set("startMs", ms); toast.success("Switched to a dry time"); }}
@@ -555,7 +577,7 @@ export default function Book() {
               </p>
             )}
             <div className="flex items-center justify-between gap-3">
-              {step > 0 ? <Button type="button" variant="ghost" onClick={() => { setError(null); setAttempted(null); setStep(step - 1); }}><ArrowLeft /> Back</Button> : <Button asChild variant="ghost"><Link to="/"><ArrowLeft /> Home</Link></Button>}
+              {step > 0 ? <Button type="button" variant="ghost" onClick={() => { setError(null); setAttempted(null); goStep(step - 1); }}><ArrowLeft /> Back</Button> : <Button asChild variant="ghost"><Link to="/"><ArrowLeft /> Home</Link></Button>}
               {step < 3 ? (
                 <Button type="submit" size="lg" variant={guide?.ready ? "default" : "outline"} className={cn("min-w-0 flex-1 sm:flex-none", guide?.ready && "shadow-lift ring-2 ring-sun ring-offset-2 ring-offset-background")}>
                   Continue<span className="hidden sm:inline"> to {guide?.next ?? "the next step"}</span> <ArrowRight />
