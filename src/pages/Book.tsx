@@ -84,6 +84,35 @@ function Field({ id, label, hint, error, children }: { id: string; label: string
   );
 }
 
+
+const digitsOf = (v: string) => v.replace(/\D/g, "");
+/** Forgiving checks with a specific, friendly reason for each thing that's missing. */
+export function contactProblems(f: { name: string; phone: string; email: string }) {
+  return {
+    name: f.name.trim().length < 2 ? "Add your name so Dario knows who to look for." : null,
+    phone: digitsOf(f.phone).length < 10 ? "Add a mobile number with area code so we can text you (like 503 555 0100)." : null,
+    email: !/^\S+@\S+\.\S+$/.test(f.email.trim()) ? "Add an email like name@example.com for your receipt." : null,
+  };
+}
+
+/** One of the three contact fields: numbered, marked required, with a live tick and its own specific error. */
+function ContactField({ n, id, label, hint, error, valid, children }: { n: number; id: string; label: string; hint: string; error: string | null; valid: boolean; children: React.ReactNode }) {
+  return (
+    <div className="space-y-1.5">
+      <Label htmlFor={id} className="flex items-center gap-2 text-base">
+        <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground" aria-hidden="true">{n}</span>
+        {label}
+        <span className="text-xs font-semibold text-danger">Required</span>
+        {valid && <Check className="ml-auto size-4 text-fern" aria-label="looks good" />}
+      </Label>
+      {children}
+      {error
+        ? <p id={`${id}-err`} className="text-sm font-medium text-danger">{error}</p>
+        : <p id={`${id}-hint`} className="text-sm text-muted-foreground">{hint}</p>}
+    </div>
+  );
+}
+
 export default function Book() {
   const [params] = useSearchParams();
   const init = useMemo(() => initialForm(params), []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -106,7 +135,16 @@ export default function Book() {
     setError(null);
   };
 
-  useEffect(() => { heading.current?.focus(); }, [step]);
+  // On the last step, put the cursor in the first contact field that's still empty, so typing can start at once.
+  const [touched, setTouched] = useState({ name: false, phone: false, email: false });
+  const [contactTried, setContactTried] = useState(false); // pressed "book" with a field still missing
+  useEffect(() => {
+    if (step === 3) {
+      const first = (["name", "phone", "email"] as const).find((k) => !form[k].trim());
+      if (first) { document.getElementById(first)?.focus(); return; }
+    }
+    heading.current?.focus();
+  }, [step]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // An error under a long form can be off screen: bring it into view so a stuck tap always explains itself.
   const errorRef = useRef<HTMLParagraphElement>(null);
@@ -145,7 +183,9 @@ export default function Book() {
     if (step === 2) {
       return { ready: !!form.startMs, text: form.startMs ? `${fmtDayLong(form.startMs)} at ${fmtTime(form.startMs)}` : "Pick a day, then a time", next: "review" };
     }
-    return null;
+    const p = contactProblems(form);
+    const ok = !p.name && !p.phone && !p.email;
+    return { ready: ok, text: ok ? `Ready to book, ${form.name.trim().split(/\s+/)[0]}` : "Add your name, mobile number and email above", next: "" };
   })();
 
   const next = () => {
@@ -164,8 +204,12 @@ export default function Book() {
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.name.trim() || !form.phone.trim() || !/^\S+@\S+\.\S+$/.test(form.email)) {
-      return setError("We need your name, a mobile number for texts, and a valid email.");
+    const problems = contactProblems(form);
+    if (problems.name || problems.phone || problems.email) {
+      setTouched({ name: true, phone: true, email: true });
+      setContactTried(true);
+      document.getElementById(problems.name ? "name" : problems.phone ? "phone" : "email")?.focus();
+      return;
     }
     if (!form.vehicle || !form.service || !form.parking || !form.startMs) return;
     setBusy(true);
@@ -359,17 +403,53 @@ export default function Book() {
 
           {step === 3 && q && form.startMs && zone && form.parking && (
             <div className="space-y-6">
+              <section aria-labelledby="contact-h" className="space-y-4 rounded-lg border-2 border-primary/50 bg-card p-5 shadow-card">
+                <div>
+                  <h3 id="contact-h" className="font-display text-xl font-bold">Last thing: who should we text?</h3>
+                  <p className="text-sm text-muted-foreground">Three quick fields. We only use them for your booking.</p>
+                </div>
+                {contactTried && (() => { const p = contactProblems(form); return (p.name || p.phone || p.email) ? (
+                  <p role="alert" className="rounded-md border border-danger/30 bg-danger-soft px-4 py-3 text-sm font-semibold text-danger">
+                    Add your name, a mobile number and a valid email to book. The fields to fix are marked below.
+                  </p>
+                ) : null; })()}
+                <div className="grid gap-5 sm:grid-cols-2">
+                  {(() => {
+                    const p = contactProblems(form);
+                    const err = (k: "name" | "phone" | "email") => (touched[k] ? p[k] : null);
+                    const bad = (k: "name" | "phone" | "email") => !!err(k);
+                    const ring = (k: "name" | "phone" | "email") => cn(bad(k) && "border-danger ring-2 ring-danger/40");
+                    return (
+                      <>
+                        <ContactField n={1} id="name" label="Your name" hint="So Dario knows who to look for." error={err("name")} valid={!p.name}>
+                          <Input id="name" autoComplete="name" enterKeyHint="next" required aria-required="true" aria-invalid={bad("name")} aria-describedby={bad("name") ? "name-err" : "name-hint"} className={ring("name")}
+                            value={form.name} onChange={(e) => set("name", e.target.value)} onBlur={() => setTouched((t) => ({ ...t, name: true }))} placeholder="Alex Rivera" />
+                        </ContactField>
+                        <ContactField n={2} id="phone" label="Mobile number" hint="For your reminders and the on-the-way text." error={err("phone")} valid={!p.phone}>
+                          <Input id="phone" type="tel" inputMode="tel" autoComplete="tel" enterKeyHint="next" required aria-required="true" aria-invalid={bad("phone")} aria-describedby={bad("phone") ? "phone-err" : "phone-hint"} className={ring("phone")}
+                            value={form.phone} onChange={(e) => set("phone", e.target.value)} onBlur={() => setTouched((t) => ({ ...t, phone: true }))} placeholder="(503) 555-0100" />
+                        </ContactField>
+                        <div className="sm:col-span-2">
+                          <ContactField n={3} id="email" label="Email" hint="For your receipt and booking link." error={err("email")} valid={!p.email}>
+                            <Input id="email" type="email" inputMode="email" autoComplete="email" enterKeyHint="done" required aria-required="true" aria-invalid={bad("email")} aria-describedby={bad("email") ? "email-err" : "email-hint"} className={ring("email")}
+                              value={form.email} onChange={(e) => set("email", e.target.value)} onBlur={() => setTouched((t) => ({ ...t, email: true }))} placeholder="alex@example.com" />
+                          </ContactField>
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+                <button type="button" className="text-sm font-semibold text-fern underline underline-offset-4"
+                  onClick={() => { setForm((f) => ({ ...f, name: "Alex Rivera", phone: "(503) 555-0142", email: "alex@example.com" })); setTouched({ name: false, phone: false, email: false }); setError(null); toast("Sample details filled in", { description: "Nothing is sent to anyone." }); }}>
+                  Just trying it out? Fill in sample details
+                </button>
+              </section>
+
               <ReviewCard form={form} q={q} zone={zone} onChangeTime={() => setStep(2)} />
               <WeatherStatus
                 parking={form.parking} startMs={form.startMs} durationMin={q.durationMin} zone={zone}
                 onPick={(ms) => { set("startMs", ms); toast.success("Switched to a dry time"); }}
               />
-              <div className="grid gap-5 sm:grid-cols-2">
-                <Field id="name" label="Your name"><Input id="name" autoComplete="name" value={form.name} onChange={(e) => set("name", e.target.value)} /></Field>
-                <Field id="phone" label="Mobile number" hint="For your reminders. Reply C to confirm, or tap the link."><Input id="phone" type="tel" autoComplete="tel" value={form.phone} onChange={(e) => set("phone", e.target.value)} placeholder="(503) 555-0100" aria-describedby="phone-hint" /></Field>
-              </div>
-              <Field id="email" label="Email"><Input id="email" type="email" autoComplete="email" value={form.email} onChange={(e) => set("email", e.target.value)} /></Field>
-
               <fieldset className="rounded-lg border bg-card p-5">
                 <legend className="px-1 font-display text-lg font-bold">Keep it clean? <span className="text-sm font-medium text-muted-foreground">(optional)</span></legend>
                 <p className="mb-3 text-sm text-muted-foreground">
@@ -432,7 +512,7 @@ export default function Book() {
                   Continue<span className="hidden sm:inline"> to {guide?.next ?? "the next step"}</span> <ArrowRight />
                 </Button>
               ) : (
-                <Button type="submit" size="lg" variant="sun" disabled={busy} aria-label={busy ? "Holding your slot" : `Book it · pay ${dollars(DEPOSIT_CENTS)} deposit`} className="min-w-0 flex-1 sm:flex-none">
+                <Button type="submit" size="lg" variant="sun" disabled={busy} aria-label={busy ? "Holding your slot" : `Book it · pay ${dollars(DEPOSIT_CENTS)} deposit`} className={cn("min-w-0 flex-1 sm:flex-none", guide?.ready && !busy && "shadow-lift ring-2 ring-sun ring-offset-2 ring-offset-background")}>
                   {busy ? <><Loader2 className="animate-spin" aria-hidden="true" /> Holding your slot…</> : <><LockKeyhole aria-hidden="true" /> <span className="sm:hidden" aria-hidden="true">{`Pay ${dollars(DEPOSIT_CENTS)} & book`}</span><span className="hidden sm:inline" aria-hidden="true">{`Book it · pay ${dollars(DEPOSIT_CENTS)} deposit`}</span></>}
                 </Button>
               )}

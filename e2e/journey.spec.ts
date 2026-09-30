@@ -1039,3 +1039,98 @@ test.describe("Choosing a car and a service is obvious", () => {
     await expect(page.getByRole("radio", { name: /Interior Reset/ })).not.toBeChecked();
   });
 });
+
+test.describe("The contact details can't be missed or fumbled", () => {
+  async function toReview(page: Page) {
+    await page.goto("/book?v=suv&s=full&zip=97212&p=garage");
+    await page.getByLabel("Street address").fill("3999 NE Test St");
+    await page.getByRole("button", { name: /^Continue/ }).click();
+    await page.locator("fieldset button[aria-pressed]:not([disabled])").first().click();
+    await page.locator("fieldset button[aria-pressed]").filter({ hasText: /^\d{1,2}:\d{2} [AP]M/ }).first().click();
+    await page.getByRole("button", { name: /^Continue/ }).click();
+    await expect(page.getByRole("heading", { name: /Review and pay/ })).toBeVisible();
+  }
+  const jobCount = (page: Page) => page.evaluate((key) => JSON.parse(localStorage.getItem(key)!).jobs.length as number, STORE_KEY);
+  const pay = (page: Page) => page.getByRole("button", { name: /^Book it/ });
+  const booked = (page: Page) => expect(page.getByText("You're booked", { exact: true })).toBeVisible({ timeout: 10_000 });
+
+  test("the three fields are at the top of the step, marked Required, and the cursor is already in the first", async ({ page }) => {
+    await toReview(page);
+    await expect(page.locator("#name")).toBeFocused();
+    const box = page.getByRole("region", { name: /who should we text/i });
+    await expect(box).toBeVisible();
+    await expect(box.getByText("Required")).toHaveCount(3);
+    await expect(page.locator("#name")).toHaveAttribute("aria-required", "true");
+    const vp = page.viewportSize()!;
+    const nb = await page.locator("#name").boundingBox();
+    expect(nb!.y + nb!.height, "the name field is on the first screen").toBeLessThanOrEqual(vp.height);
+    // The pinned bar says what's missing.
+    await expect(page.getByText("Add your name, mobile number and email above")).toBeVisible();
+  });
+
+  test("booking with nothing filled explains each field, keeps you on the fields, and books nothing", async ({ page }) => {
+    await toReview(page);
+    const before = await jobCount(page);
+    await pay(page).click();
+    const box = page.getByRole("region", { name: /who should we text/i });
+    await expect(box.getByRole("alert")).toContainText(/name, a mobile number and a valid email/);
+    await expect(box).toContainText("Add your name so Dario knows who to look for.");
+    await expect(box).toContainText(/mobile number with area code/);
+    await expect(box).toContainText(/email like name@example\.com/);
+    await expect(page.locator("#name")).toHaveAttribute("aria-invalid", "true");
+    await expect(page.locator("#name")).toBeFocused();
+    const nb = await page.locator("#name").boundingBox();
+    expect(nb!.y).toBeGreaterThanOrEqual(0); // still looking at the fields, not scrolled away
+    expect(await jobCount(page)).toBe(before);
+  });
+
+  test("each mistake is named on its own field, the cursor goes to the first bad one, and fixing them lets you book", async ({ page }) => {
+    await toReview(page);
+    await page.locator("#name").fill("Al");
+    await page.locator("#phone").fill("12345");
+    await page.locator("#email").fill("abc");
+    await pay(page).click();
+    await expect(page.locator("#phone")).toBeFocused(); // the name is fine; the phone is the first problem
+    await expect(page.locator("#phone-err")).toBeVisible();
+    await expect(page.locator("#email-err")).toBeVisible();
+    await expect(page.locator("#name-err")).toHaveCount(0);
+    await page.locator("#phone").fill("(503) 555-0100");
+    await expect(page.locator("#phone-err")).toHaveCount(0);
+    await page.locator("#email").fill("al@example.com");
+    await expect(page.getByLabel("looks good")).toHaveCount(3);
+    await expect(page.getByText("Ready to book, Al")).toBeVisible();
+    await pay(page).click();
+    await booked(page);
+  });
+
+  test("ordinary ways of typing a phone number and an email are accepted", async ({ page }) => {
+    for (const [phone, email] of [["503.555.0100", "ALEX@EXAMPLE.COM"], ["+1 503 555 0100", "  alex@mail.co.uk "], ["5035550100", "a.b+c@example.com"]]) {
+      await toReview(page);
+      await page.locator("#name").fill("Alex Rivera");
+      await page.locator("#phone").fill(phone);
+      await page.locator("#email").fill(email);
+      await pay(page).click();
+      await booked(page);
+    }
+  });
+
+  test("'Fill in sample details' makes the path one tap for anyone just trying it", async ({ page }) => {
+    await toReview(page);
+    await page.getByRole("button", { name: /Fill in sample details/ }).click();
+    await expect(page.locator("#name")).toHaveValue("Alex Rivera");
+    await expect(page.locator("#phone")).toHaveValue("(503) 555-0142");
+    await expect(page.locator("#email")).toHaveValue("alex@example.com");
+    await expect(page.getByText("Ready to book, Alex")).toBeVisible();
+    await pay(page).click();
+    await booked(page);
+  });
+
+  test("leaving a field empty flags it straight away, before you press anything", async ({ page }) => {
+    await toReview(page);
+    await page.locator("#name").fill("Alex");
+    await page.locator("#phone").focus();
+    await page.locator("#phone").blur();
+    await expect(page.locator("#phone-err")).toBeVisible();
+    await expect(page.locator("#email-err")).toHaveCount(0); // not yet visited, so not yet nagged
+  });
+});
