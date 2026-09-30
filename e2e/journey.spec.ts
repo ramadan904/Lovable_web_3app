@@ -1134,3 +1134,76 @@ test.describe("The contact details can't be missed or fumbled", () => {
     await expect(page.locator("#email-err")).toHaveCount(0); // not yet visited, so not yet nagged
   });
 });
+
+test.describe("A correct zip always gets through", () => {
+  const where = async (page: Page) => {
+    await page.goto("/book?v=sedan&s=express");
+    await expect(page.getByRole("heading", { name: "Where do we find you?" })).toBeVisible();
+  };
+  const cont = (page: Page) => page.getByRole("button", { name: /^Continue/ });
+  const parkAndAddress = async (page: Page) => {
+    await page.getByLabel("Street address").fill("1 Zip St");
+    await page.getByText("Garage", { exact: true }).click();
+  };
+
+  test("the 'enter your zip' message disappears the moment a valid zip is typed, without pressing anything", async ({ page }) => {
+    await where(page);
+    await parkAndAddress(page);
+    await cont(page).click();
+    await expect(page.getByRole("alert").filter({ hasText: "Enter your 5-digit zip" })).toBeVisible();
+    await page.getByLabel("Zip code").fill("97212");
+    await expect(page.getByRole("alert").filter({ hasText: "Enter your 5-digit zip" })).toHaveCount(0);
+    await cont(page).click();
+    await expect(page.getByRole("heading", { name: "When suits you?" })).toBeVisible();
+  });
+
+  test("a zip filled in without the page noticing (autofill, a script) is still read from the field", async ({ page }) => {
+    await where(page);
+    await parkAndAddress(page);
+    // Set the field values directly, firing no events at all, as some autofill does.
+    await page.evaluate(() => {
+      (document.getElementById("zip") as HTMLInputElement).value = "97212";
+    });
+    await cont(page).click();
+    await expect(page.getByRole("heading", { name: "When suits you?" })).toBeVisible();
+  });
+
+  test("a zip that was wrong, then fixed, is never left showing an error", async ({ page }) => {
+    await where(page);
+    await parkAndAddress(page);
+    await page.getByLabel("Zip code").fill("99999");
+    await expect(page.getByText(/We don't reach that zip yet/)).toBeVisible();
+    await cont(page).click();
+    await expect(page.getByRole("alert").filter({ hasText: "outside our service area" })).toBeVisible();
+    await page.getByLabel("Zip code").fill("97212");
+    await expect(page.getByText(/We don't reach that zip yet/)).toHaveCount(0);
+    await expect(page.getByRole("alert").filter({ hasText: "outside our service area" })).toHaveCount(0);
+    await cont(page).click();
+    await expect(page.getByRole("heading", { name: "When suits you?" })).toBeVisible();
+  });
+
+  for (const raw of ["97212-1234", "OR 97212", " 97212 ", "97 212", "97212abc", "9-7-2-1-2"]) {
+    test(`typing the zip as "${raw}" works`, async ({ page }) => {
+      await where(page);
+      await parkAndAddress(page);
+      await page.getByLabel("Zip code").fill(raw);
+      await expect(page.getByLabel("Zip code")).toHaveValue("97212");
+      await cont(page).click();
+      await expect(page.getByRole("heading", { name: "When suits you?" })).toBeVisible();
+    });
+  }
+
+  test("a zip from the text box is already there, and a stale message can't come back", async ({ page }) => {
+    await page.goto("/book?v=suv&s=interior&zip=97202");
+    await expect(page.getByLabel("Zip code")).toHaveValue("97202");
+    await page.getByLabel("Street address").fill("1 Umatilla St");
+    await page.getByText("Driveway", { exact: true }).click();
+    await cont(page).click();
+    await expect(page.getByRole("heading", { name: "When suits you?" })).toBeVisible();
+    // Back and forward again: no old message reappears.
+    await page.getByRole("button", { name: "Back" }).click();
+    await expect(page.getByRole("alert")).toHaveCount(0);
+    await cont(page).click();
+    await expect(page.getByRole("heading", { name: "When suits you?" })).toBeVisible();
+  });
+});

@@ -95,6 +95,23 @@ export function contactProblems(f: { name: string; phone: string; email: string 
   };
 }
 
+/** Any way of typing a zip (97212, 97212-1234, "OR 97212", "97 212") becomes five digits. */
+const zipOf = (raw: string) => raw.replace(/\D/g, "").slice(0, 5);
+
+/** What, if anything, stops this step from moving on. Pure, so the message always matches the form as it is right now. */
+function stepProblem(step: number, f: { vehicle: unknown; service: unknown; zip: string; address: string; parking: unknown; startMs: number | null }): string | null {
+  if (step === 0 && (!f.vehicle || !f.service)) return "Pick what you drive and the service you'd like.";
+  if (step === 1) {
+    const zip = zipOf(f.zip);
+    if (zip.length < 5) return "Enter your 5-digit zip so we can check the drive.";
+    if (!zoneForZip(zip)) return "That zip is outside our service area.";
+    if (!f.address.trim()) return "Add the street address where the car will be.";
+    if (!f.parking) return "Tell us where the car will be parked.";
+  }
+  if (step === 2 && !f.startMs) return "Pick a time to continue.";
+  return null;
+}
+
 /** One of the three contact fields: numbered, marked required, with a live tick and its own specific error. */
 function ContactField({ n, id, label, hint, error, valid, children }: { n: number; id: string; label: string; hint: string; error: string | null; valid: boolean; children: React.ReactNode }) {
   return (
@@ -118,7 +135,8 @@ export default function Book() {
   const init = useMemo(() => initialForm(params), []); // eslint-disable-line react-hooks/exhaustive-deps
   const [form, setForm] = useState<Form>(init.form);
   const [step, setStep] = useState(init.step);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null); // booking errors (slot taken, etc.)
+  const [attempted, setAttempted] = useState<number | null>(null); // the step whose Continue was pressed while something was missing
   const [busy, setBusy] = useState(false);
   const [joining, setJoining] = useState(false);
   const [waitlisted, setWaitlisted] = useState(false);
@@ -126,6 +144,9 @@ export default function Book() {
   const now = useNow();
   const nav = useNavigate();
   const heading = useRef<HTMLHeadingElement>(null);
+  // The message for a step that couldn't advance is worked out from the form as it is NOW, so the moment the
+  // problem is fixed the message is gone: it can never be left over from an earlier attempt.
+  const shownError = (attempted === step ? stepProblem(step, form) : null) ?? error;
   // Changing the plan (car, service, place) can invalidate a chosen time, so it clears.
   // Changing these changes how long the job takes or where Dario drives, so a time chosen earlier no longer applies.
   // Parking is not one of them: it only changes the rain rules, which are re-checked when the calendar opens.
@@ -149,15 +170,16 @@ export default function Book() {
   // An error under a long form can be off screen: bring it into view so a stuck tap always explains itself.
   const errorRef = useRef<HTMLParagraphElement>(null);
   useEffect(() => {
-    if (!error) return;
+    if (!shownError) return;
     const el = errorRef.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
     if (r.top < 0 || r.bottom > window.innerHeight) el.scrollIntoView({ block: "center", behavior: "instant" });
-  }, [error]);
+  }, [shownError]);
 
-  const zone = form.zip.length >= 5 ? zoneForZip(form.zip) : null;
-  const zipBad = form.zip.length >= 5 && !zone;
+  const zip5 = zipOf(form.zip);
+  const zone = zip5.length === 5 ? zoneForZip(zip5) : null;
+  const zipBad = zip5.length === 5 && !zone;
   const q = form.vehicle && form.service ? quote(form.vehicle, form.service, form.addons, zone) : null;
   const covered = form.parking ? isCovered(form.parking) : false;
 
@@ -189,16 +211,21 @@ export default function Book() {
   })();
 
   const next = () => {
-    if (step === 0) {
-      if (!form.vehicle || !form.service) return setError("Pick what you drive and the service you'd like.");
-    }
+    let f = form;
     if (step === 1) {
-      if (!zone) return setError(zipBad ? "That zip is outside our service area." : "Enter your 5-digit zip so we can check the drive.");
-      if (!form.address.trim()) return setError("Add the street address where the car will be.");
-      if (!form.parking) return setError("Tell us where the car will be parked.");
+      // Trust what is on screen: autofill, a paste or a script can fill a field without React hearing about it.
+      const zipEl = document.getElementById("zip") as HTMLInputElement | null;
+      const addrEl = document.getElementById("address") as HTMLInputElement | null;
+      const zipNow = zipOf(zipEl?.value ?? f.zip);
+      const addrNow = addrEl?.value ?? f.address;
+      if (zipNow !== f.zip || addrNow !== f.address) {
+        f = { ...f, zip: zipNow, address: addrNow, ...(zipNow !== f.zip ? { startMs: null } : {}) };
+        setForm(f);
+      }
     }
-    if (step === 2 && !form.startMs) return setError("Pick a time to continue.");
     setError(null);
+    if (stepProblem(step, f)) { setAttempted(step); return; }
+    setAttempted(null);
     setStep(step + 1);
   };
 
@@ -218,7 +245,7 @@ export default function Book() {
         const job = actions.book({
           customer: { name: form.name, phone: form.phone, email: form.email },
           vehicle: { kind: form.vehicle!, label: form.label.trim() || VEHICLES[form.vehicle!].name.toLowerCase() },
-          service: form.service!, addons: form.addons, zip: form.zip, address: form.address, parking: form.parking!,
+          service: form.service!, addons: form.addons, zip: zip5, address: form.address, parking: form.parking!,
           access: { gateCode: form.gateCode, notes: form.notes }, startMs: form.startMs!, plan: form.plan,
         });
         nav(`/b/${job.code}?new=1`);
@@ -242,7 +269,7 @@ export default function Book() {
     actions.joinWaitlist({
       customer: { name: form.name, phone: form.phone, email: form.email },
       vehicle: { kind: form.vehicle, label: form.label.trim() || VEHICLES[form.vehicle].name.toLowerCase() },
-      service: form.service, addons: form.addons, zip: form.zip, address: form.address, parking: form.parking,
+      service: form.service, addons: form.addons, zip: zip5, address: form.address, parking: form.parking,
     });
     setWaitlisted(true);
     setError(null);
@@ -338,7 +365,7 @@ export default function Book() {
               <div className="grid gap-5 sm:grid-cols-[10rem_1fr]">
                 <Field id="zip" label="Zip code" error={zipBad ? "We don't reach that zip yet. We cover Portland and the westside suburbs." : null}
                   hint={zone ? undefined : "We'll check the drive from Dario's last job."}>
-                  <Input id="zip" inputMode="numeric" autoComplete="postal-code" maxLength={5} value={form.zip} onChange={(e) => set("zip", e.target.value.replace(/\D/g, ""))} placeholder="97212" aria-describedby={zipBad ? "zip-err" : "zip-hint"} aria-invalid={zipBad} />
+                  <Input id="zip" inputMode="numeric" autoComplete="postal-code" value={form.zip} onChange={(e) => set("zip", zipOf(e.target.value))} onBlur={(e) => { const z = zipOf(e.target.value); if (z !== form.zip) set("zip", z); }} placeholder="97212" aria-describedby={zipBad ? "zip-err" : "zip-hint"} aria-invalid={zipBad} />
                 </Field>
                 <Field id="address" label="Street address">
                   <Input id="address" autoComplete="street-address" value={form.address} onChange={(e) => set("address", e.target.value)} placeholder="3415 NE 15th Ave" />
@@ -493,8 +520,8 @@ export default function Book() {
             </div>
           )}
 
-          {error && step !== 2 && <p ref={errorRef} role="alert" className="rounded-md border border-danger/30 bg-danger-soft px-4 py-3 text-sm font-semibold text-danger">{error}</p>}
-          {error && step === 2 && !joining && <p ref={errorRef} role="alert" className="rounded-md border border-danger/30 bg-danger-soft px-4 py-3 text-sm font-semibold text-danger">{error}</p>}
+          {shownError && step !== 2 && <p ref={errorRef} role="alert" className="rounded-md border border-danger/30 bg-danger-soft px-4 py-3 text-sm font-semibold text-danger">{shownError}</p>}
+          {shownError && step === 2 && !joining && <p ref={errorRef} role="alert" className="rounded-md border border-danger/30 bg-danger-soft px-4 py-3 text-sm font-semibold text-danger">{shownError}</p>}
 
           <div className="sticky bottom-0 z-20 border-t bg-background/95 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/85">
             {guide && (
@@ -506,7 +533,7 @@ export default function Book() {
               </p>
             )}
             <div className="flex items-center justify-between gap-3">
-              {step > 0 ? <Button type="button" variant="ghost" onClick={() => { setError(null); setStep(step - 1); }}><ArrowLeft /> Back</Button> : <Button asChild variant="ghost"><Link to="/"><ArrowLeft /> Home</Link></Button>}
+              {step > 0 ? <Button type="button" variant="ghost" onClick={() => { setError(null); setAttempted(null); setStep(step - 1); }}><ArrowLeft /> Back</Button> : <Button asChild variant="ghost"><Link to="/"><ArrowLeft /> Home</Link></Button>}
               {step < 3 ? (
                 <Button type="submit" size="lg" variant={guide?.ready ? "default" : "outline"} className={cn("min-w-0 flex-1 sm:flex-none", guide?.ready && "shadow-lift ring-2 ring-sun ring-offset-2 ring-offset-background")}>
                   Continue<span className="hidden sm:inline"> to {guide?.next ?? "the next step"}</span> <ArrowRight />
