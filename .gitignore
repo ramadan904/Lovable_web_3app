@@ -13,3 +13,5 @@ playwright-report
 test-results
 dist-artifact
 dist-pages
+
+contracts/**/target/
