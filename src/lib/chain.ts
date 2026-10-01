@@ -1,6 +1,6 @@
 // The on-chain side of the deposit: constants, the escrow's ABI and the rules it enforces,
 // as pure functions. Nothing here touches a wallet, so it is all unit-tested.
-import { keccak256, parseAbi, toHex, type Address, type Chain } from "viem";
+import { isAddress, keccak256, parseAbi, toHex, type Address, type Chain } from "viem";
 import { arbitrum, arbitrumSepolia } from "viem/chains";
 import { FREE_CHANGE_H } from "./business";
 import type { Job } from "./model";
@@ -48,11 +48,12 @@ export interface ChainConfig {
   decimals: number;
 }
 
-const isAddress = (v: string | undefined): v is Address => !!v && /^0x[0-9a-fA-F]{40}$/.test(v);
+// Strict: an all-lowercase address is fine, but a mixed-case one must carry a valid EIP-55 checksum, or a typo would only show up as an error at payment time.
+const validAddress = (v: string | undefined): v is Address => !!v && isAddress(v);
 
 /** On-chain deposits are on only when an escrow and a token are configured (see docs/ONCHAIN.md). */
 export function chainConfig(env: Partial<ImportMetaEnv> = import.meta.env): ChainConfig | null {
-  if (!isAddress(env.VITE_ESCROW_ADDRESS) || !isAddress(env.VITE_TOKEN_ADDRESS)) return null;
+  if (!validAddress(env.VITE_ESCROW_ADDRESS) || !validAddress(env.VITE_TOKEN_ADDRESS)) return null;
   const chain = CHAINS[Number(env.VITE_CHAIN_ID ?? arbitrumSepolia.id)];
   if (!chain) return null;
   return {

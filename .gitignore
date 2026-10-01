@@ -15,3 +15,5 @@ dist-artifact
 dist-pages
 
 contracts/**/target/
+!.env.chain-e2e
+dist-chain

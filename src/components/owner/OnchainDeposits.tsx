@@ -8,7 +8,7 @@ import { explainError, explorerAddress, settleBlocker, settlementFor, shortAddre
 import type { Job, State } from "@/lib/model";
 import { actions } from "@/lib/store";
 import { fmtDay, fmtTime } from "@/lib/time";
-import { connectWallet, hasWallet, readBooking, readOwner, rescheduleOnchain, settleDeposit, type OnchainBooking } from "@/lib/wallet";
+import { connectWallet, hasWallet, readBooking, readChainNowMs, readOwner, rescheduleOnchain, settleDeposit, type OnchainBooking } from "@/lib/wallet";
 
 const ACTION: Record<Settlement, { label: string; done: string }> = {
   refund: { label: "Refund", done: "Refunded to the customer's wallet." },
@@ -28,11 +28,14 @@ export function OnchainDeposits({ state, cfg }: { state: State; cfg: ChainConfig
   const [chain, setChain] = useState<Record<string, OnchainBooking>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
+  // The contract's timing rules run on the chain's clock, so that is the clock the card checks them against.
+  const [chainNow, setChainNow] = useState(() => Date.now());
 
   const key = jobs.map((j) => `${j.id}:${j.onchain!.settleTx ?? ""}:${j.startMs}`).join("|");
   useEffect(() => {
     let live = true;
     readOwner(cfg).then((o) => live && setOwner(o), () => {});
+    readChainNowMs(cfg).then((t) => live && setChainNow(t), () => {});
     Promise.all(jobs.map((j) => readBooking(cfg, j.onchain!.id).then((b) => [j.id, b] as const, () => null))).then((rows) => {
       if (live) setChain(Object.fromEntries(rows.filter((r): r is readonly [string, OnchainBooking] => r !== null)));
     });
@@ -58,7 +61,7 @@ export function OnchainDeposits({ state, cfg }: { state: State; cfg: ChainConfig
   };
 
   const settle = (job: Job, kind: Settlement) => {
-    const why = settleBlocker(kind, job.startMs, Date.now());
+    const why = settleBlocker(kind, job.startMs, chainNow);
     if (why) return void toast(why);
     void run(job, () => settleDeposit(cfg, job.onchain!, kind), ACTION[kind].done, true);
   };
@@ -103,7 +106,7 @@ export function OnchainDeposits({ state, cfg }: { state: State; cfg: ChainConfig
       {rows.length ? (
         <ul className="mt-4 space-y-2">
           {rows.map(({ job, kind, lag }) => {
-            const why = kind ? settleBlocker(kind, job.startMs, Date.now()) : null;
+            const why = kind ? settleBlocker(kind, job.startMs, chainNow) : null;
             return (
               <li key={job.id} className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-card px-3 py-2 text-sm">
                 <span>

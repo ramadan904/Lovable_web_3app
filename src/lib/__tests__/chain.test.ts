@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { getAddress } from "viem";
 import { describe, expect, it } from "vitest";
 import { ESCROW_ABI, bookingId, canSelfCancel, centsToUnits, chainConfig, explainError, onchainState, settleBlocker, settlementFor, shortAddress } from "../chain";
 import { DEPOSIT_CENTS } from "../business";
@@ -21,6 +22,13 @@ describe("chainConfig", () => {
     expect(cfg.chain.id).toBe(421614);
     expect(cfg.symbol).toBe("USDC");
     expect(cfg.decimals).toBe(6);
+  });
+  it("rejects a mistyped mixed-case address, whose checksum is wrong, instead of failing at payment time", () => {
+    const good = getAddress("0x75faf114eafb1bdbe2f0316df893fd58ce46aa4d"); // has letters, so a case flip changes the checksum
+    expect(chainConfig({ VITE_ESCROW_ADDRESS: good, VITE_TOKEN_ADDRESS: TOKEN })).not.toBeNull();
+    const typo = good.replace(/[a-f]/, (c) => (c === c.toLowerCase() ? c.toUpperCase() : c.toLowerCase())); // flips one letter's case
+    expect(typo).not.toBe(good);
+    expect(chainConfig({ VITE_ESCROW_ADDRESS: typo, VITE_TOKEN_ADDRESS: TOKEN })).toBeNull();
   });
   it("supports Arbitrum One and rejects other chains", () => {
     expect(chainConfig({ VITE_ESCROW_ADDRESS: ESCROW, VITE_TOKEN_ADDRESS: TOKEN, VITE_CHAIN_ID: "42161" })!.chain.id).toBe(42161);

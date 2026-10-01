@@ -117,6 +117,12 @@ export async function readBooking(cfg: ChainConfig, id: `0x${string}`): Promise<
   return { customer, amountUnits, startMs: Number(start) * 1000, state: onchainState(state) };
 }
 
+/** The chain's own clock (the latest block), which is the one the contract's timing rules use. */
+export async function readChainNowMs(cfg: ChainConfig): Promise<number> {
+  const block = await publicClient(cfg).getBlock();
+  return Number(block.timestamp) * 1000;
+}
+
 export async function readOwner(cfg: ChainConfig): Promise<Address> {
   return publicClient(cfg).readContract({ address: cfg.escrow, abi: ESCROW_ABI, functionName: "owner" });
 }
