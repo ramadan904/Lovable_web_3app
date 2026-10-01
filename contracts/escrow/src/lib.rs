@@ -10,7 +10,7 @@
 //! * Rain is off-chain, so the owner refunds a rain-affected booking (`refund`).
 //! * The owner can only keep a deposit once the free-change window has closed
 //!   (`capture`), and can claim it as part of the price once the job has started
-//!   (`apply`).
+//!   (`complete`).
 //! * If the owner never settles, the customer can take the money back a week
 //!   after the job (`reclaim`). Funds can never be stuck.
 //!
@@ -32,6 +32,8 @@ use stylus_sdk::{
 pub const FREE_WINDOW_SECS: u64 = 24 * 60 * 60;
 /// How long after the job the owner has to settle before the customer can reclaim.
 pub const RECLAIM_GRACE_SECS: u64 = 7 * 24 * 60 * 60;
+/// The furthest the owner may push a job's start time later in one go (a rain move).
+pub const OWNER_MAX_PUSH_SECS: u64 = 14 * 24 * 60 * 60;
 
 pub const STATE_NONE: u8 = 0;
 pub const STATE_HELD: u8 = 1;
@@ -46,6 +48,7 @@ sol! {
     event Refunded(bytes32 indexed id, address indexed customer, uint256 amount);
     event Kept(bytes32 indexed id, address indexed owner, uint256 amount);
     event Applied(bytes32 indexed id, address indexed owner, uint256 amount);
+    event Rescheduled(bytes32 indexed id, uint64 oldStart, uint64 newStart);
 
     error NotOwner();
     error NotCustomer();
@@ -58,6 +61,7 @@ sol! {
     error FreeWindowStillOpen();
     error JobNotStarted();
     error TooEarlyToReclaim();
+    error BadReschedule();
     error TransferFailed();
 }
 
@@ -74,6 +78,7 @@ pub enum EscrowError {
     FreeWindowStillOpen(FreeWindowStillOpen),
     JobNotStarted(JobNotStarted),
     TooEarlyToReclaim(TooEarlyToReclaim),
+    BadReschedule(BadReschedule),
     TransferFailed(TransferFailed),
 }
 
@@ -185,7 +190,7 @@ impl FernhillEscrow {
     }
 
     /// Owner claims the deposit as part of the price once the job has started.
-    pub fn apply(&mut self, id: FixedBytes<32>) -> Result<(), EscrowError> {
+    pub fn complete(&mut self, id: FixedBytes<32>) -> Result<(), EscrowError> {
         self.only_owner()?;
         let (_, amount, start_time) = self.held(id)?;
         if self.vm().block_timestamp() < start_time {
@@ -194,6 +199,33 @@ impl FernhillEscrow {
         let owner = self.owner.get();
         self.settle(id, STATE_APPLIED, owner, amount)?;
         self.vm().log(Applied { id, owner, amount });
+        Ok(())
+    }
+
+    /// Moves the job's start time, so the free-cancel window and the owner's claim follow a rebooking.
+    /// The customer can move it while their free window is open (the app's own rule for moves).
+    /// The owner can only push it later, by up to 14 days, e.g. a rain move the customer didn't answer:
+    /// that can never shorten the customer's rights, only reopen their free window.
+    pub fn reschedule(&mut self, id: FixedBytes<32>, new_start: u64) -> Result<(), EscrowError> {
+        let (customer, _, start_time) = self.held(id)?;
+        let now = self.vm().block_timestamp();
+        if new_start <= now {
+            return Err(EscrowError::StartInPast(StartInPast {}));
+        }
+        let sender = self.vm().msg_sender();
+        if sender == customer {
+            if now.saturating_add(FREE_WINDOW_SECS) > start_time {
+                return Err(EscrowError::FreeWindowClosed(FreeWindowClosed {}));
+            }
+        } else if sender == self.owner.get() {
+            if new_start <= start_time || new_start > start_time.saturating_add(OWNER_MAX_PUSH_SECS) {
+                return Err(EscrowError::BadReschedule(BadReschedule {}));
+            }
+        } else {
+            return Err(EscrowError::NotCustomer(NotCustomer {}));
+        }
+        self.bookings.setter(id).start_time.set(U64::from(new_start));
+        self.vm().log(Rescheduled { id, oldStart: start_time, newStart: new_start });
         Ok(())
     }
 
@@ -256,11 +288,6 @@ impl FernhillEscrow {
         }
         Ok(())
     }
-}
-
-#[cfg(feature = "export-abi")]
-pub fn print_from_args() {
-    stylus_sdk::abi::export::print_abi::<FernhillEscrow>("MIT-OR-APACHE-2.0", "pragma solidity ^0.8.23;");
 }
 
 #[cfg(test)]
@@ -424,7 +451,7 @@ mod tests {
         vm.set_sender(alice());
         assert!(matches!(c.refund(id()), Err(EscrowError::NotOwner(_))));
         assert!(matches!(c.capture(id()), Err(EscrowError::NotOwner(_))));
-        assert!(matches!(c.apply(id()), Err(EscrowError::NotOwner(_))));
+        assert!(matches!(c.complete(id()), Err(EscrowError::NotOwner(_))));
     }
 
     #[test]
@@ -446,14 +473,14 @@ mod tests {
     }
 
     #[test]
-    fn owner_applies_the_deposit_only_once_the_job_has_started() {
+    fn owner_completes_the_job_and_takes_the_deposit_only_once_it_has_started() {
         let (vm, mut c) = with_deposit(3 * DAY);
         vm.set_sender(dario());
         vm.set_block_timestamp(T0 + 3 * DAY - 1);
-        assert!(matches!(c.apply(id()), Err(EscrowError::JobNotStarted(_))));
+        assert!(matches!(c.complete(id()), Err(EscrowError::JobNotStarted(_))));
         vm.set_block_timestamp(T0 + 3 * DAY);
         mock_pay(&vm, dario(), true);
-        c.apply(id()).unwrap();
+        c.complete(id()).unwrap();
         assert_eq!(state(&c), STATE_APPLIED);
     }
 
@@ -466,7 +493,7 @@ mod tests {
         vm.set_sender(dario());
         assert!(matches!(c.refund(id()), Err(EscrowError::NotHeld(_))));
         assert!(matches!(c.capture(id()), Err(EscrowError::NotHeld(_))));
-        assert!(matches!(c.apply(id()), Err(EscrowError::NotHeld(_))));
+        assert!(matches!(c.complete(id()), Err(EscrowError::NotHeld(_))));
     }
 
     #[test]
@@ -484,6 +511,63 @@ mod tests {
         mock_pay(&vm, alice(), true);
         c.reclaim(id()).unwrap();
         assert_eq!(state(&c), STATE_REFUNDED);
+    }
+
+    #[test]
+    fn customer_reschedules_while_the_free_window_is_open_and_the_window_follows() {
+        let (vm, mut c) = with_deposit(3 * DAY);
+        c.reschedule(id(), T0 + 6 * DAY).unwrap();
+        assert_eq!(c.booking(id()).2, T0 + 6 * DAY);
+        // Four days in: the old start is 1 day away, the new one 3 days away, so a free cancel still works.
+        vm.set_block_timestamp(T0 + 3 * DAY);
+        mock_pay(&vm, alice(), true);
+        c.cancel_free(id()).unwrap();
+    }
+
+    #[test]
+    fn customer_cannot_reschedule_inside_24_hours_or_into_the_past() {
+        let (vm, mut c) = with_deposit(3 * DAY);
+        assert!(matches!(c.reschedule(id(), T0), Err(EscrowError::StartInPast(_))));
+        vm.set_block_timestamp(T0 + 2 * DAY + 60);
+        assert!(matches!(c.reschedule(id(), T0 + 9 * DAY), Err(EscrowError::FreeWindowClosed(_))));
+        assert_eq!(c.booking(id()).2, T0 + 3 * DAY);
+    }
+
+    #[test]
+    fn a_stranger_cannot_reschedule() {
+        let (vm, mut c) = with_deposit(3 * DAY);
+        vm.set_sender(bob());
+        assert!(matches!(c.reschedule(id(), T0 + 4 * DAY), Err(EscrowError::NotCustomer(_))));
+    }
+
+    #[test]
+    fn owner_can_only_push_a_job_later_and_not_by_more_than_14_days() {
+        let (vm, mut c) = with_deposit(3 * DAY);
+        vm.set_sender(dario());
+        // Earlier would shrink the customer's free window: refused.
+        assert!(matches!(c.reschedule(id(), T0 + 2 * DAY), Err(EscrowError::BadReschedule(_))));
+        assert!(matches!(c.reschedule(id(), T0 + 3 * DAY), Err(EscrowError::BadReschedule(_))));
+        assert!(matches!(c.reschedule(id(), T0 + 3 * DAY + 14 * DAY + 1), Err(EscrowError::BadReschedule(_))));
+        c.reschedule(id(), T0 + 4 * DAY).unwrap();
+        assert_eq!(c.booking(id()).2, T0 + 4 * DAY);
+    }
+
+    #[test]
+    fn an_owner_push_reopens_the_customers_free_window() {
+        let (vm, mut c) = with_deposit(3 * DAY);
+        vm.set_sender(dario());
+        vm.set_block_timestamp(T0 + 2 * DAY + 1); // inside the original free window: the owner could keep it
+        c.reschedule(id(), T0 + 5 * DAY).unwrap();
+        // The job is now 3 days away, so the customer can cancel free again and the owner can't keep it.
+        assert!(matches!(c.capture(id()), Err(EscrowError::FreeWindowStillOpen(_))));
+    }
+
+    #[test]
+    fn a_settled_booking_cannot_be_rescheduled() {
+        let (vm, mut c) = with_deposit(3 * DAY);
+        mock_pay(&vm, alice(), true);
+        c.cancel_free(id()).unwrap();
+        assert!(matches!(c.reschedule(id(), T0 + 4 * DAY), Err(EscrowError::NotHeld(_))));
     }
 
     #[test]

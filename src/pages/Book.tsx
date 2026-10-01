@@ -12,11 +12,14 @@ import {
   ADDONS, DEPOSIT_CENTS, PARKING, PLAN_DISCOUNT, PLAN_WEEKS, SERVICES, VEHICLES, ZONES, dollars, hoursLabel, isCovered, needsDryDay, quote, zoneForZip,
   type AddonKey, type Parking, type ServiceKey, type VehicleKind,
 } from "@/lib/business";
+import { chainConfig, explainError, explorerAddress } from "@/lib/chain";
 import { BookingError } from "@/lib/model";
 import { neighbourDeal, validate } from "@/lib/engine";
+import { createJob, type BookingInput } from "@/lib/ops";
 import { actions, getState, nowMs, useStore } from "@/lib/store";
 import { fmtDayLong, fmtTime } from "@/lib/time";
 import { cn } from "@/lib/utils";
+import { cancelFree, hasWallet, payDeposit, type PayStep } from "@/lib/wallet";
 
 const STEPS = ["Your car", "Where", "When", "You"] as const;
 
@@ -85,6 +88,9 @@ export default function Book() {
   const [step, setStep] = useState(init.step);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const cfg = useMemo(() => chainConfig(), []);
+  const [payWith, setPayWith] = useState<"usdc" | "demo">(cfg && hasWallet() ? "usdc" : "demo");
+  const [payStep, setPayStep] = useState<PayStep | null>(null);
   const [joining, setJoining] = useState(false);
   const [waitlisted, setWaitlisted] = useState(false);
   const now = useNow();
@@ -125,31 +131,65 @@ export default function Book() {
     setStep(step + 1);
   };
 
+  /** A booking that fails for a reason the customer can fix: back to the calendar, or a message. */
+  const bookingFailed = (err: unknown) => {
+    setBusy(false);
+    setPayStep(null);
+    if (err instanceof BookingError && (err.code === "slot_taken" || err.code === "too_soon")) {
+      set("startMs", null);
+      setStep(2);
+      toast.error("That time was just taken", { description: "Someone booked it while you were typing. Here's what's open now." });
+    } else if (err instanceof BookingError) {
+      setError(err.message);
+    } else {
+      setError(explainError(err));
+    }
+  };
+
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.name.trim() || !form.phone.trim() || !/^\S+@\S+\.\S+$/.test(form.email)) {
       return setError("We need your name, a mobile number for texts, and a valid email.");
     }
     if (!form.vehicle || !form.service || !form.parking || !form.startMs) return;
+    const input: BookingInput = {
+      customer: { name: form.name, phone: form.phone, email: form.email },
+      vehicle: { kind: form.vehicle, label: form.label.trim() || VEHICLES[form.vehicle].name.toLowerCase() },
+      service: form.service, addons: form.addons, zip: form.zip, address: form.address, parking: form.parking,
+      access: { gateCode: form.gateCode, notes: form.notes }, startMs: form.startMs, plan: form.plan,
+    };
     setBusy(true);
+    setError(null);
+
+    if (cfg && payWith === "usdc") {
+      void (async () => {
+        try {
+          // A dry run first: if the slot or the details are wrong it throws here, before any money moves, and it
+          // tells us the exact booking code, which is what the escrow keys the deposit by (hashed).
+          const { job: preview } = createJob(getState(), input, nowMs());
+          const dep = await payDeposit(cfg, { code: preview.code, startMs: input.startMs, cents: DEPOSIT_CENTS }, setPayStep);
+          try {
+            const job = actions.book({ ...input, onchain: dep });
+            if (job.code !== preview.code) throw new Error("The booking code changed while paying.");
+            nav(`/b/${job.code}?new=1`);
+          } catch (err) {
+            // The money is in escrow but the booking didn't take: give it straight back, no one's permission needed.
+            try { await cancelFree(cfg, dep); toast("Your deposit was returned to your wallet."); } catch { toast.error("The booking failed and your deposit is still in escrow. You can take it back from the escrow contract."); }
+            throw err;
+          }
+        } catch (err) {
+          bookingFailed(err);
+        }
+      })();
+      return;
+    }
+
     window.setTimeout(() => {
       try {
-        const job = actions.book({
-          customer: { name: form.name, phone: form.phone, email: form.email },
-          vehicle: { kind: form.vehicle!, label: form.label.trim() || VEHICLES[form.vehicle!].name.toLowerCase() },
-          service: form.service!, addons: form.addons, zip: form.zip, address: form.address, parking: form.parking!,
-          access: { gateCode: form.gateCode, notes: form.notes }, startMs: form.startMs!, plan: form.plan,
-        });
+        const job = actions.book(input);
         nav(`/b/${job.code}?new=1`);
       } catch (err) {
-        setBusy(false);
-        if (err instanceof BookingError && (err.code === "slot_taken" || err.code === "too_soon")) {
-          set("startMs", null);
-          setStep(2);
-          toast.error("That time was just taken", { description: "Someone booked it while you were typing. Here's what's open now." });
-        } else if (err instanceof BookingError) {
-          setError(err.message);
-        } else throw err;
+        bookingFailed(err);
       }
     }, 450);
   };
@@ -355,7 +395,25 @@ export default function Book() {
                   <li>No answer by three hours before? We release the slot to the waitlist and keep the deposit.</li>
                   <li>Rain on an outdoor job? We move you free, to a dry day you choose. If you'd rather not move, cancel for a full refund at any time.</li>
                 </ul>
-                <p className="rounded-md bg-sun-soft px-3 py-2 text-sm font-medium text-sun-ink">Demo: no card is charged. In production the deposit runs through Stripe.</p>
+                {cfg ? (
+                  <fieldset className="space-y-2">
+                    <legend className="eyebrow mb-1">How to pay the deposit</legend>
+                    <RadioCard name="pay" value="usdc" checked={payWith === "usdc"} onChange={() => setPayWith("usdc")}>
+                      <span className="font-display text-base font-bold">{dollars(DEPOSIT_CENTS)} in {cfg.symbol} on {cfg.chain.name}</span>
+                      <span className="text-xs text-muted-foreground">Held by a smart contract, not by us. Cancel free until 24 hours before and it returns to your wallet on its own.</span>
+                    </RadioCard>
+                    <RadioCard name="pay" value="demo" checked={payWith === "demo"} onChange={() => setPayWith("demo")}>
+                      <span className="font-display text-base font-bold">Demo: no payment</span>
+                      <span className="text-xs text-muted-foreground">Nothing is charged.</span>
+                    </RadioCard>
+                    {payWith === "usdc" && !hasWallet() && <p className="rounded-md bg-sun-soft px-3 py-2 text-sm font-medium text-sun-ink">No wallet found in this browser. Install MetaMask, Rabby or Coinbase Wallet to pay in {cfg.symbol}, or choose the demo.</p>}
+                    <p className="text-xs text-muted-foreground">
+                      The contract is open source and <a className="font-semibold underline underline-offset-2" href={explorerAddress(cfg, cfg.escrow)} target="_blank" rel="noreferrer">live on {cfg.chain.name}</a>. Only a hash of your booking code goes on-chain: no name, phone or address.
+                    </p>
+                  </fieldset>
+                ) : (
+                  <p className="rounded-md bg-sun-soft px-3 py-2 text-sm font-medium text-sun-ink">Demo: no card is charged. In production the deposit runs through Stripe.</p>
+                )}
               </div>
             </div>
           )}
@@ -368,7 +426,9 @@ export default function Book() {
             {step < 3 ? (
               <Button type="submit" size="lg">Continue <ArrowRight /></Button>
             ) : (
-              <Button type="submit" size="lg" variant="sun" disabled={busy}>{busy ? "Booking…" : `Book it · pay ${dollars(DEPOSIT_CENTS)} deposit`}</Button>
+              <Button type="submit" size="lg" variant="sun" disabled={busy || (!!cfg && payWith === "usdc" && !hasWallet())}>
+                {busy ? (payStep === "connect" ? "Connect your wallet…" : payStep === "approve" ? `Approve ${cfg?.symbol} in your wallet…` : payStep === "deposit" ? "Confirm the deposit…" : "Booking…") : cfg && payWith === "usdc" ? `Book it · pay ${dollars(DEPOSIT_CENTS)} in ${cfg.symbol}` : `Book it · pay ${dollars(DEPOSIT_CENTS)} deposit`}
+              </Button>
             )}
           </div>
         </form>

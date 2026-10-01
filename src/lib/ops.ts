@@ -24,6 +24,8 @@ export interface BookingInput {
   simReplies?: boolean;
   /** A care plan: repeat every this many weeks. */
   plan?: number | null;
+  /** The deposit, if it was paid into the escrow contract. */
+  onchain?: Job["onchain"];
 }
 
 const clone = (s: State): State => structuredClone(s);
@@ -128,6 +130,7 @@ export function createJob(state: State, input: BookingInput, nowMs: number): { s
     dealMin: deal?.savedMin ?? 0,
     depositCents: DEPOSIT_CENTS,
     depositState: "held",
+    onchain: input.onchain ?? null,
     movedFrom: [],
     confirmedAt: soon ? nowMs : null,
     closedAt: null,
@@ -204,6 +207,14 @@ export function cancelJob(state: State, id: string, nowMs: number, reason = "Can
   sendForJob(s, job, "cancelled", nowMs, { refunded });
   pushEvent(s, nowMs, "cancelled", job.id, `${job.customer.name} cancelled ${fmtDay(job.startMs)} at ${fmtTime(job.startMs)}`);
   offerBackfill(s, { start: job.startMs, end: job.startMs + job.durationMin * 60_000 }, nowMs);
+  return s;
+}
+
+/** Remember the transaction that settled a job's escrowed deposit. */
+export function recordSettlement(state: State, id: string, settleTx: `0x${string}`): State {
+  const s = clone(state);
+  const job = findJob(s, id);
+  if (job.onchain) job.onchain.settleTx = settleTx;
   return s;
 }
 

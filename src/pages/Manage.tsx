@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { CalendarPlus, Check, CheckCircle2, Clock4, CloudRain, Copy, MapPin, MessageSquare, Repeat, Umbrella } from "lucide-react";
 import { toast } from "sonner";
+import { EscrowReceipt } from "@/components/EscrowReceipt";
 import { PhoneThread } from "@/components/PhoneThread";
 import { SlotPicker } from "@/components/SlotPicker";
 import { Tracker } from "@/components/Tracker";
@@ -11,12 +12,14 @@ import { Input, Textarea } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useNow } from "@/hooks/useNow";
 import { timelineFor } from "@/lib/automations";
+import { canSelfCancel, chainConfig, explainError } from "@/lib/chain";
 import { ADDONS, BUSINESS, FREE_CHANGE_H, PARKING, PLAN_DISCOUNT, RAIN_CHECK_H, SERVICES, ZONES, dollars, hoursLabel, isCovered, needsDryDay } from "@/lib/business";
 import { CAN_DOWNLOAD, downloadIcs } from "@/lib/ics";
 import { dryOptions } from "@/lib/engine";
 import { ACTIVE, BookingError } from "@/lib/model";
-import { getJob } from "@/lib/ops";
-import { actions, useStore } from "@/lib/store";
+import { chooseRainOption, getJob, moveJob } from "@/lib/ops";
+import { actions, getState, nowMs, useStore } from "@/lib/store";
+import { cancelFree, rescheduleOnchain } from "@/lib/wallet";
 import { HOUR, MIN, localDate, fmtDay, fmtDayLong, fmtRelative, fmtStamp, fmtTime } from "@/lib/time";
 import { cn } from "@/lib/utils";
 
@@ -39,6 +42,8 @@ export default function Manage() {
   const [moving, setMoving] = useState(false);
   const [target, setTarget] = useState<number | null>(null);
   const [cancelling, setCancelling] = useState(false);
+  const cfg = useMemo(() => chainConfig(), []);
+  const [txBusy, setTxBusy] = useState(false);
   const changeRef = useRef<HTMLElement>(null);
   const nowMinute = Math.floor(now / MIN);
   const freeNow = !!job && job.startMs - now >= FREE_CHANGE_H * HOUR;
@@ -96,6 +101,38 @@ export default function Manage() {
   };
   const guard = (fn: () => void, ok: string) => {
     try { fn(); toast.success(ok); } catch (e) { if (e instanceof BookingError) toast.error(e.message); else throw e; }
+  };
+
+  // Actions that may need the customer's wallet. The app's own rules are checked first (a dry run throws before
+  // anything is signed), then the chain, then the booking changes: a taken slot never costs a transaction.
+  const guardAsync = async (fn: () => Promise<string | void>, ok: string) => {
+    setTxBusy(true);
+    try { toast.success((await fn()) || ok); } catch (e) { toast.error(e instanceof BookingError ? e.message : explainError(e)); } finally { setTxBusy(false); }
+  };
+  /** Keeps the escrow's start time in step with a move. Only the customer's own window allows it; after that the business wallet syncs it. */
+  const syncChainStart = async (ms: number) => {
+    if (cfg && job.onchain && job.depositState === "held" && canSelfCancel(job.startMs, Date.now())) await rescheduleOnchain(cfg, job.onchain, ms);
+  };
+  const moveTo = async (ms: number) => {
+    moveJob(getState(), job.id, ms, nowMs(), "customer");
+    await syncChainStart(ms);
+    actions.move(job.id, ms);
+  };
+  const chooseDry = async (i: number) => {
+    chooseRainOption(getState(), job.id, i, nowMs(), "customer");
+    await syncChainStart(job.rainOffer!.options[i]);
+    actions.chooseRain(job.id, i);
+  };
+  const cancelNow = async (): Promise<string> => {
+    const refunds = free || job.rainAffected; // the same rule cancelJob applies
+    if (cfg && job.onchain && refunds && job.depositState === "held" && canSelfCancel(job.startMs, Date.now())) {
+      const tx = await cancelFree(cfg, job.onchain); // the contract sends the money back first; nothing else is needed from the business
+      actions.cancel(job.id);
+      actions.recordSettlement(job.id, tx);
+      return "Cancelled. Your USDC is back in your wallet.";
+    }
+    actions.cancel(job.id);
+    return job.onchain && refunds ? "Cancelled. The business wallet will send your USDC back." : "Cancelled. Deposit refunded.";
   };
 
   return (
@@ -158,7 +195,7 @@ export default function Manage() {
           <p className="mt-1 text-foreground/85">Your car is outdoors, so we won't wash it in a downpour. Pick a dry time, free to move. If you don't pick, we'll take the first one {fmtRelative(now, job.rainOffer.autoAt)}.</p>
           <div className="mt-4 flex flex-wrap gap-2">
             {job.rainOffer.options.map((ms, i) => (
-              <Button key={ms} variant={i === 0 ? "default" : "outline"} onClick={() => guard(() => actions.chooseRain(job.id, i), "Moved to a dry day")}>
+              <Button key={ms} variant={i === 0 ? "default" : "outline"} disabled={txBusy} onClick={() => void guardAsync(() => chooseDry(i), "Moved to a dry day")}>
                 {fmtDayLong(ms)}, {fmtTime(ms)}
               </Button>
             ))}
@@ -186,7 +223,7 @@ export default function Manage() {
         <WeatherStatus
           className="mb-6"
           parking={job.parking} startMs={job.startMs} durationMin={job.durationMin} zone={job.zone} excludeJobId={job.id}
-          onPick={free ? (ms) => guard(() => actions.move(job.id, ms), "Moved to a dry day") : undefined}
+          onPick={free ? (ms) => void guardAsync(() => moveTo(ms), "Moved to a dry day") : undefined}
           pickLabel="Move to"
         />
       )}
@@ -205,6 +242,8 @@ export default function Manage() {
             </dl>
             {active && CAN_DOWNLOAD && <Button variant="outline" size="sm" className="mt-5" onClick={() => downloadIcs(job)}><CalendarPlus /> Add to calendar</Button>}
           </section>
+
+          {job.onchain && cfg && <EscrowReceipt job={job} cfg={cfg} />}
 
           {active && <Tracker state={state} date={localDate(job.startMs)} now={now} focusJobId={job.id} />}
 
@@ -239,7 +278,7 @@ export default function Manage() {
                   <p className="text-sm font-semibold">{covered ? "Nearest open times, one tap:" : "Nearest dry times, one tap:"}</p>
                   <ul className="mt-2 flex flex-wrap gap-2" aria-label="One-tap alternatives">
                     {alternatives.map((ms) => (
-                      <li key={ms}><Button size="sm" variant="soft" onClick={() => guard(() => actions.move(job.id, ms), "Moved. Your reminders moved too.")}>{fmtDay(ms)} · {fmtTime(ms)}</Button></li>
+                      <li key={ms}><Button size="sm" variant="soft" disabled={txBusy} onClick={() => void guardAsync(() => moveTo(ms), "Moved. Your reminders moved too.")}>{fmtDay(ms)} · {fmtTime(ms)}</Button></li>
                     ))}
                   </ul>
                 </div>
@@ -255,8 +294,8 @@ export default function Manage() {
                 <div className="mt-5 space-y-5">
                   <SlotPicker durationMin={job.durationMin} zone={job.zone} parking={job.parking} now={now} value={target} onChange={setTarget} excludeJobId={job.id} needsDry={needsDryDay(job.addons, job.parking)} />
                   <div className="flex gap-2">
-                    <Button disabled={!target} onClick={() => guard(() => { actions.move(job.id, target!); setMoving(false); setTarget(null); }, "Moved. Your reminders moved too.")}>
-                      {target ? `Move to ${fmtDayLong(target)}, ${fmtTime(target)}` : "Pick a new time"}
+                    <Button disabled={!target || txBusy} onClick={() => void guardAsync(async () => { await moveTo(target!); setMoving(false); setTarget(null); }, "Moved. Your reminders moved too.")}>
+                      {txBusy ? "Confirm in wallet…" : target ? `Move to ${fmtDayLong(target)}, ${fmtTime(target)}` : "Pick a new time"}
                     </Button>
                     <Button variant="ghost" onClick={() => { setMoving(false); setTarget(null); }}>Never mind</Button>
                   </div>
@@ -266,7 +305,7 @@ export default function Manage() {
                 <div className="mt-5 space-y-3 rounded-md border border-danger/30 bg-danger-soft p-4">
                   <p className="font-semibold text-danger">Cancel this booking? Your {dollars(job.depositCents)} deposit is refunded{job.rainAffected && !free ? " in full, because rain changed your booking" : ""}.</p>
                   <div className="flex gap-2">
-                    <Button variant="danger" onClick={() => guard(() => { actions.cancel(job.id); setCancelling(false); }, "Cancelled. Deposit refunded.")}>Yes, cancel</Button>
+                    <Button variant="danger" disabled={txBusy} onClick={() => void guardAsync(async () => { const msg = await cancelNow(); setCancelling(false); return msg; }, "Cancelled. Deposit refunded.")}>{txBusy ? "Confirm in wallet…" : "Yes, cancel"}</Button>
                     <Button variant="ghost" onClick={() => setCancelling(false)}>Keep it</Button>
                   </div>
                 </div>

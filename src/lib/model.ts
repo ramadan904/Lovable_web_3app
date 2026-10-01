@@ -10,6 +10,19 @@ export interface RainOffer {
   options: number[]; // start times (UTC ms)
 }
 
+/** A deposit held in the Fernhill escrow contract on Arbitrum. The app's `depositState` is the intent; the chain is the money. */
+export interface OnchainDeposit {
+  /** keccak256 of the booking code: the contract's booking id. No personal data goes on-chain. */
+  id: `0x${string}`;
+  chainId: number;
+  escrow: `0x${string}`;
+  /** The wallet that paid, and the only one that can cancel or reclaim. */
+  customer: `0x${string}`;
+  depositTx: `0x${string}`;
+  /** The transaction that moved the money out of escrow (refund, keep or apply). */
+  settleTx: `0x${string}` | null;
+}
+
 export interface Job {
   id: string;
   /** Short, human-readable code used in links: FH-4K7Q */
@@ -34,6 +47,8 @@ export interface Job {
   dealMin: number;
   depositCents: number;
   depositState: "held" | "refunded" | "kept" | "applied";
+  /** Set when the deposit was paid in USDC through the escrow contract rather than as a demo. */
+  onchain?: OnchainDeposit | null;
   /** Earlier start times, if the job has been moved. */
   movedFrom: number[];
   confirmedAt: number | null;

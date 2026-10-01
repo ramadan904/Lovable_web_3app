@@ -3,7 +3,7 @@
 import { useSyncExternalStore } from "react";
 import { advance, tick } from "./automations";
 import { answerInquiry } from "./inquiry";
-import { cancelJob, chooseRainOption, claimOffer, confirmJob, createJob, joinWaitlist, moveJob, reportDelay, sendOwnerReply, skipVisit, endPlan, type BookingInput, type WaitlistInput } from "./ops";
+import { cancelJob, chooseRainOption, claimOffer, confirmJob, createJob, joinWaitlist, moveJob, recordSettlement, reportDelay, sendOwnerReply, skipVisit, endPlan, type BookingInput, type WaitlistInput } from "./ops";
 import { seedState } from "./seed";
 import type { Job, State } from "./model";
 import { HOUR, addDays, atLocal, localDate, weekdayOf } from "./time";
@@ -62,6 +62,7 @@ export const actions = {
   move(id: string, startMs: number) { set(moveJob(state, id, startMs, nowMs(), "customer")); },
   cancel(id: string) { set(cancelJob(state, id, nowMs())); },
   confirm(id: string) { set(confirmJob(state, id, nowMs())); },
+  recordSettlement(id: string, tx: `0x${string}`) { set(recordSettlement(state, id, tx)); },
   chooseRain(id: string, index: number) { set(chooseRainOption(state, id, index, nowMs(), "customer")); },
   joinWaitlist(input: WaitlistInput) { const { state: next, entry } = joinWaitlist(state, input, nowMs()); set(next); return entry; },
   claim(waitlistId: string): Job { const { state: next, job } = claimOffer(state, waitlistId, nowMs()); set(next); return job; },

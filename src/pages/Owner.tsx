@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { CheckCircle2, ChevronDown, Clock, MessageSquareText, Repeat, Route, Send, Timer, Wallet } from "lucide-react";
 import { DaySheet } from "@/components/owner/DaySheet";
 import { NeedsYou } from "@/components/owner/NeedsYou";
+import { OnchainDeposits } from "@/components/owner/OnchainDeposits";
 import { WaitlistCard } from "@/components/owner/WaitlistCard";
 import { WeatherMoves } from "@/components/owner/WeatherMoves";
 import { Inquiries } from "@/components/owner/Inquiries";
@@ -12,6 +13,7 @@ import { WeekView } from "@/components/owner/WeekView";
 import { Van } from "@/components/Van";
 import { useNow } from "@/hooks/useNow";
 import { BUSINESS, OPEN_WEEKDAYS } from "@/lib/business";
+import { chainConfig } from "@/lib/chain";
 import { activeJobs } from "@/lib/engine";
 import { MINUTES_SAVED, ledgerFor } from "@/lib/ledger";
 import { useStore } from "@/lib/store";
@@ -32,6 +34,7 @@ const hm = (min: number) => (min >= 60 ? `${Math.floor(min / 60)} h ${min % 60 ?
 export default function Owner() {
   const state = useStore();
   const now = useNow();
+  const chain = useMemo(() => chainConfig(), []);
   const today = localDate(now);
   const [tab, setTab] = useState<Tab>("day");
   const [day, setDay] = useState<string | null>(null);
@@ -89,6 +92,8 @@ export default function Owner() {
       </header>
 
       <NeedsYou state={state} />
+
+      {chain && <OnchainDeposits state={state} cfg={chain} />}
 
       <section aria-labelledby="handled-h" className="mb-10">
         <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
